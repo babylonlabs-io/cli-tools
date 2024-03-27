@@ -6,3 +6,13 @@
 db-name = "staking-api-service"
 # The keyring's backend, where the keys are stored (os|file|kwallet|pass|test|memory)
 address = "mongodb://localhost:27017"
+
+[btc-config]
+# Btc node host
+host = "localhost:18556"
+# Btc node user
+user = "user"
+# Btc node password
+pass = "pass"
+# Btc network (testnet3|mainnet|regtest|simnet|signet)
+network = "regtest	"

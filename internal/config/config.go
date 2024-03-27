@@ -12,12 +12,14 @@ import (
 )
 
 type Config struct {
-	Db DbConfig `mapstructure:"db-config"`
+	Db  DbConfig  `mapstructure:"db-config"`
+	Btc BtcConfig `mapstructure:"btc-config"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Db: *DefaultDBConfig(),
+		Db:  *DefaultDBConfig(),
+		Btc: *DefaultBtcConfig(),
 	}
 }
 
@@ -37,6 +39,16 @@ const defaultConfigTemplate = `# This is a TOML config file.
 db-name = "{{ .Db.DbName }}"
 # The keyring's backend, where the keys are stored (os|file|kwallet|pass|test|memory)
 address = "{{ .Db.Address }}"
+
+[btc-config]
+# Btc node host
+host = "{{ .Btc.Host }}"
+# Btc node user
+user = "{{ .Btc.User }}"
+# Btc node password
+pass = "{{ .Btc.Pass }}"
+# Btc network (testnet3|mainnet|regtest|simnet|signet)
+network = "{{ .Btc.Network }}"
 `
 
 func writeConfigToFile(configFilePath string, config *Config) error {

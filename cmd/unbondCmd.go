@@ -28,7 +28,7 @@ var runUnbondingPipelineCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Running unbonding pipeline with config file path: %s \n", path)
-		fmt.Println(cfg.Db.DbName)
+		fmt.Println(cfg)
 
 		return nil
 	},

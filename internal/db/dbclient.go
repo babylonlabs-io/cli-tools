@@ -12,11 +12,6 @@ type Database struct {
 	Client *mongo.Client
 }
 
-type DbResultMap[T any] struct {
-	Data            []T    `json:"data"`
-	PaginationToken string `json:"paginationToken"`
-}
-
 func New(ctx context.Context, dbName string, dbURI string) (*Database, error) {
 	clientOps := options.Client().ApplyURI(dbURI)
 	client, err := mongo.Connect(ctx, clientOps)
