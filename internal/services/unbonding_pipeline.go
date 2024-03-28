@@ -335,13 +335,17 @@ func (up *UnbondingPipeline) Run() error {
 
 		if err != nil {
 			up.logger.Error("Failed to send unbonding transaction: %v", err)
-			up.store.SetUnbondingTransactionProcessingFailed(utx)
+			if err := up.store.SetUnbondingTransactionProcessingFailed(utx); err != nil {
+				return wrapCrititical(err)
+			}
 		} else {
 			up.logger.Info(
 				"Succesfully sent unbonding transaction",
 				slog.String("tx_hash", hash.String()),
 			)
-			up.store.SetUnbondingTransactionProcessed(utx)
+			if err := up.store.SetUnbondingTransactionProcessed(utx); err != nil {
+				return wrapCrititical(err)
+			}
 		}
 	}
 
