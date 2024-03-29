@@ -15,4 +15,13 @@ user = "user"
 # Btc node password
 pass = "pass"
 # Btc network (testnet3|mainnet|regtest|simnet|signet)
-network = "regtest	"
+network = "regtest"
+
+# The unsafe params configuration only for poc/mvp purposes. Storing private keys
+# in the config file is not secure. After adding more secure options remove this.
+[unsafe-params-config]
+# The list of covenant private keys
+covenant_private_keys = ["b52947dbd8c4e6447a788b3620ec1f4d06339d05d90220878e168e036729c578", ]
+
+# The quorum of the covenants required to sign the transaction
+covenant_quorum = 1

@@ -18,7 +18,7 @@ func DefaultBtcConfig() *BtcConfig {
 		Host:    "localhost:18556",
 		User:    "user",
 		Pass:    "pass",
-		Network: "regtest	",
+		Network: "regtest",
 	}
 }
 

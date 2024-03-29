@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonchain/cli-tools/internal/logger"
+	"github.com/babylonchain/cli-tools/internal/services"
 
 	"github.com/spf13/cobra"
 )
@@ -27,9 +27,13 @@ var runUnbondingPipelineCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Running unbonding pipeline with config file path: %s \n", path)
-		fmt.Println(cfg)
+		log := logger.DefaultLogger()
+		pipeLine, err := services.NewUnbondingPipelineFromConfig(log, cfg)
 
-		return nil
+		if err != nil {
+			return err
+		}
+
+		return pipeLine.Run()
 	},
 }

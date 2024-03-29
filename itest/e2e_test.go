@@ -4,6 +4,7 @@
 package e2etest
 
 import (
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -69,6 +70,7 @@ func (d *stakingData) unbondingAmount() btcutil.Amount {
 func StartManager(
 	t *testing.T,
 	numMatureOutputsInWallet uint32) *TestManager {
+	logger := logger.DefaultLogger()
 	h := NewBitcoindHandler(t)
 	h.Start()
 	passphrase := "pass"
@@ -76,13 +78,32 @@ func StartManager(
 	// only outputs which are 100 deep are mature
 	_ = h.GenerateBlocks(int(numMatureOutputsInWallet) + 100)
 
-	btcConfig := config.DefaultBtcConfig()
-	btcConfig.Host = "127.0.0.1:18443"
-	btcConfig.User = "user"
-	btcConfig.Pass = "pass"
-	btcConfig.Network = netParams.Name
+	numCovenantKeys := 3
+	quorum := uint32(2)
+	var coventantKeys []*btcec.PrivateKey
+	for i := 0; i < numCovenantKeys; i++ {
+		key, err := btcec.NewPrivateKey()
+		require.NoError(t, err)
+		coventantKeys = append(coventantKeys, key)
+	}
 
-	client, err := btcclient.NewBtcClient(btcConfig)
+	var covenantKeysStrings []string
+	for _, key := range coventantKeys {
+		covenantKeysStrings = append(covenantKeysStrings, hex.EncodeToString(key.Serialize()))
+	}
+
+	appConfig := config.DefaultConfig()
+
+	appConfig.Btc.Host = "127.0.0.1:18443"
+	appConfig.Btc.User = "user"
+	appConfig.Btc.Pass = "pass"
+	appConfig.Btc.Network = netParams.Name
+
+	appConfig.Params.CovenantPrivateKeys = covenantKeysStrings
+	appConfig.Params.CovenantQuorum = uint64(quorum)
+
+	// Client for testing purposes
+	client, err := btcclient.NewBtcClient(&appConfig.Btc)
 	require.NoError(t, err)
 
 	outputs, err := client.ListOutputs(true)
@@ -100,37 +121,14 @@ func StartManager(
 	stakerPrivKey, err := client.DumpPrivateKey(walletAddress)
 	require.NoError(t, err)
 
-	numCovenantKeys := 3
-	quorum := uint32(2)
-	var coventantKeys []*btcec.PrivateKey
-	for i := 0; i < numCovenantKeys; i++ {
-		key, err := btcec.NewPrivateKey()
-		require.NoError(t, err)
-		coventantKeys = append(coventantKeys, key)
-	}
-
 	fpKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
-	// TODO: Use mongo
-	store := services.NewInMemoryUnbondingStore()
-
-	// TODO: Use web service ?
-	paramsRetriever := services.NewStaticParamsRetriever(quorum, coventantKeys)
-
-	// TODO: Use more prod ready signer ?
-	signer, err := services.NewStaticSigner(coventantKeys)
-	require.NoError(t, err)
-
-	logger := logger.DefaultLogger()
-	pipeLine := services.NewUnbondingPipeline(
+	pipeLine, err := services.NewUnbondingPipelineFromConfig(
 		logger,
-		store,
-		signer,
-		client,
-		paramsRetriever,
-		netParams,
+		appConfig,
 	)
+	require.NoError(t, err)
 
 	return &TestManager{
 		t:                   t,
@@ -145,7 +143,8 @@ func StartManager(
 		stakerPubKey:        stakerPrivKey.PubKey(),
 		magicBytes:          []byte{0x0, 0x1, 0x2, 0x3},
 		pipeLine:            pipeLine,
-		store:               store,
+		// TODO: After adding support for mongo, this hack won't be needed
+		store: pipeLine.Store().(*services.InMemoryUnbondingStore),
 	}
 }
 
@@ -216,8 +215,6 @@ func (tm *TestManager) createUnbondingTxAndSignByStaker(
 		d.stakingAmount,
 		netParams,
 	)
-	require.NoError(tm.t, err)
-
 	require.NoError(tm.t, err)
 
 	unbondingPathInfo, err := info.UnbondingPathSpendInfo()

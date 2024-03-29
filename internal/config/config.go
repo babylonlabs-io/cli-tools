@@ -3,23 +3,25 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Db  DbConfig  `mapstructure:"db-config"`
-	Btc BtcConfig `mapstructure:"btc-config"`
+	Db     DbConfig           `mapstructure:"db-config"`
+	Btc    BtcConfig          `mapstructure:"btc-config"`
+	Params UnsafeParamsConfig `mapstructure:"unsafe-params-config"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Db:  *DefaultDBConfig(),
-		Btc: *DefaultBtcConfig(),
+		Db:     *DefaultDBConfig(),
+		Btc:    *DefaultBtcConfig(),
+		Params: *DefaultUnsafeParamsConfig(),
 	}
 }
 
@@ -49,19 +51,34 @@ user = "{{ .Btc.User }}"
 pass = "{{ .Btc.Pass }}"
 # Btc network (testnet3|mainnet|regtest|simnet|signet)
 network = "{{ .Btc.Network }}"
+
+# The unsafe params configuration only for poc/mvp purposes. Storing private keys
+# in the config file is not secure. After adding more secure options remove this.
+[unsafe-params-config]
+# The list of covenant private keys
+covenant_private_keys = [{{ range .Params.CovenantPrivateKeys }}{{ printf "%q, " . }}{{end}}]
+
+# The quorum of the covenants required to sign the transaction
+covenant_quorum = {{ .Params.CovenantQuorum }}
 `
+
+var configTemplate *template.Template
+
+func init() {
+	var err error
+	tmpl := template.New("configFileTemplate").Funcs(template.FuncMap{
+		"StringsJoin": strings.Join,
+	})
+	if configTemplate, err = tmpl.Parse(defaultConfigTemplate); err != nil {
+		panic(err)
+	}
+}
 
 func writeConfigToFile(configFilePath string, config *Config) error {
 	var buffer bytes.Buffer
 
-	tmpl := template.New("defaultConfigTemplate")
-	configTemplate, err := tmpl.Parse(defaultConfigTemplate)
-	if err != nil {
-		return err
-	}
-
 	if err := configTemplate.Execute(&buffer, config); err != nil {
-		return err
+		panic(err)
 	}
 
 	return os.WriteFile(configFilePath, buffer.Bytes(), 0o600)

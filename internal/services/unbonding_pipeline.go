@@ -6,6 +6,8 @@ import (
 	"log/slog"
 
 	staking "github.com/babylonchain/babylon/btcstaking"
+	"github.com/babylonchain/cli-tools/internal/btcclient"
+	"github.com/babylonchain/cli-tools/internal/config"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -216,6 +218,47 @@ type UnbondingPipeline struct {
 	btcParams *chaincfg.Params
 }
 
+func NewUnbondingPipelineFromConfig(
+	logger *slog.Logger,
+	cfg *config.Config,
+) (*UnbondingPipeline, error) {
+	// TODO: Swtich to mongo after adding support for it
+	store := NewInMemoryUnbondingStore()
+
+	client, err := btcclient.NewBtcClient(&cfg.Btc)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Add parse func to other configs, and do parsing in one place
+	parsedParams, err := cfg.Params.Parse()
+
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := NewStaticSigner(parsedParams.CovenantPrivateKeys)
+
+	if err != nil {
+		return nil, err
+	}
+
+	paramsRetriever := NewStaticParamsRetriever(
+		parsedParams.CovenantQuorum,
+		parsedParams.CovenantPrivateKeys,
+	)
+
+	return NewUnbondingPipeline(
+		logger,
+		store,
+		signer,
+		client,
+		paramsRetriever,
+		cfg.Btc.MustGetBtcNetworkParams(),
+	), nil
+}
+
 func NewUnbondingPipeline(
 	logger *slog.Logger,
 	store UnbondingStore,
@@ -267,6 +310,10 @@ func (up *UnbondingPipeline) signUnbondingTransaction(
 	}
 
 	return signatures, nil
+}
+
+func (up *UnbondingPipeline) Store() UnbondingStore {
+	return up.store
 }
 
 // Main Pipeline function which:
@@ -349,5 +396,6 @@ func (up *UnbondingPipeline) Run() error {
 		}
 	}
 
+	up.logger.Info("Unbonding pipeline run finished.", "num_tx_processed", len(unbondingTransactions))
 	return nil
 }
