@@ -4,16 +4,22 @@
 package e2etest
 
 import (
+	"context"
 	"encoding/hex"
+	"fmt"
 	"testing"
 	"time"
 
 	staking "github.com/babylonchain/babylon/btcstaking"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/babylonchain/cli-tools/internal/btcclient"
 	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonchain/cli-tools/internal/db"
 	"github.com/babylonchain/cli-tools/internal/logger"
 	"github.com/babylonchain/cli-tools/internal/services"
+	"github.com/babylonchain/cli-tools/itest/containers"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -41,8 +47,9 @@ type TestManager struct {
 	stakerPrivKey       *btcec.PrivateKey
 	stakerPubKey        *btcec.PublicKey
 	magicBytes          []byte
+	pipeLineConfig      *config.Config
 	pipeLine            *services.UnbondingPipeline
-	store               *services.InMemoryUnbondingStore
+	testStoreController *services.PersistentUnbondingStorage
 }
 
 type stakingData struct {
@@ -67,12 +74,41 @@ func (d *stakingData) unbondingAmount() btcutil.Amount {
 	return d.stakingAmount - d.unbondingFee
 }
 
+// PurgeAllCollections drops all collections in the specified database.
+func PurgeAllCollections(ctx context.Context, client *mongo.Client, databaseName string) error {
+	database := client.Database(databaseName)
+	collections, err := database.ListCollectionNames(ctx, bson.D{{}})
+	if err != nil {
+		return err
+	}
+
+	for _, collection := range collections {
+		if err := database.Collection(collection).Drop(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func StartManager(
 	t *testing.T,
 	numMatureOutputsInWallet uint32) *TestManager {
 	logger := logger.DefaultLogger()
-	h := NewBitcoindHandler(t)
+	m, err := containers.NewManager()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = m.ClearResources()
+	})
+
+	h := NewBitcoindHandler(t, m)
 	h.Start()
+
+	_, err = m.RunMongoDbResource()
+	require.NoError(t, err)
+
+	// Give some time to launch mongo and bitcoind
+	time.Sleep(2 * time.Second)
+
 	passphrase := "pass"
 	_ = h.CreateWallet("test-wallet", passphrase)
 	// only outputs which are 100 deep are mature
@@ -101,6 +137,7 @@ func StartManager(
 
 	appConfig.Params.CovenantPrivateKeys = covenantKeysStrings
 	appConfig.Params.CovenantQuorum = uint64(quorum)
+	appConfig.Db.Address = fmt.Sprintf("mongodb://%s", m.MongoHost())
 
 	// Client for testing purposes
 	client, err := btcclient.NewBtcClient(&appConfig.Btc)
@@ -124,6 +161,11 @@ func StartManager(
 	fpKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
+	testDbConnection, err := db.New(context.TODO(), appConfig.Db.DbName, appConfig.Db.Address)
+	require.NoError(t, err)
+
+	storeController := services.NewPersistentUnbondingStorage(testDbConnection)
+
 	pipeLine, err := services.NewUnbondingPipelineFromConfig(
 		logger,
 		appConfig,
@@ -142,9 +184,9 @@ func StartManager(
 		stakerPrivKey:       stakerPrivKey,
 		stakerPubKey:        stakerPrivKey.PubKey(),
 		magicBytes:          []byte{0x0, 0x1, 0x2, 0x3},
+		pipeLineConfig:      appConfig,
 		pipeLine:            pipeLine,
-		// TODO: After adding support for mongo, this hack won't be needed
-		store: pipeLine.Store().(*services.InMemoryUnbondingStore),
+		testStoreController: storeController,
 	}
 }
 
@@ -253,7 +295,7 @@ func (tm *TestManager) createStakingInfo(d *stakingData) *services.StakingInfo {
 	return &services.StakingInfo{
 		StakerPk:           tm.stakerPubKey,
 		FinalityProviderPk: tm.finalityProviderKey.PubKey(),
-		StakingTime:        d.stakingTime,
+		StakingTimelock:    d.stakingTime,
 		StakingAmount:      d.stakingAmount,
 	}
 }
@@ -292,7 +334,8 @@ func TestRunningPipeline(t *testing.T) {
 	// 2. Add all unbonding transactions to store
 	for _, u := range ubts {
 		ubs := u
-		err := m.store.AddTxWithSignature(
+		err := m.testStoreController.AddTxWithSignature(
+			context.Background(),
 			ubs.unbondingTx,
 			ubs.signature,
 			m.createStakingInfo(d),
@@ -301,12 +344,12 @@ func TestRunningPipeline(t *testing.T) {
 	}
 
 	// 3. Check store is not empty
-	txRequireProcessingBefore, err := m.store.GetNotProcessedUnbondingTransactions()
+	txRequireProcessingBefore, err := m.testStoreController.GetNotProcessedUnbondingTransactions(context.TODO())
 	require.NoError(t, err)
 	require.Len(t, txRequireProcessingBefore, numUnbondingTxs)
 
 	// 4. Run pipeline
-	err = m.pipeLine.Run()
+	err = m.pipeLine.Run(context.Background())
 	require.NoError(t, err)
 
 	// 5. Generate few block to make sure transactions are included in btc
@@ -322,7 +365,7 @@ func TestRunningPipeline(t *testing.T) {
 	}
 
 	// 7. Check there is no more transactions to process
-	txRequireProcessingAfter, err := m.store.GetNotProcessedUnbondingTransactions()
+	txRequireProcessingAfter, err := m.testStoreController.GetNotProcessedUnbondingTransactions(context.TODO())
 	require.NoError(t, err)
 	require.Len(t, txRequireProcessingAfter, 0)
 }

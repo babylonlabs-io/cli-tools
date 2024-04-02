@@ -62,7 +62,7 @@ func CreateUnbondingPathSpendInfo(
 		[]*btcec.PublicKey{stakingInfo.FinalityProviderPk},
 		params.CovenantPublicKeys,
 		params.CovenantQuorum,
-		stakingInfo.StakingTime,
+		stakingInfo.StakingTimelock,
 		stakingInfo.StakingAmount,
 		net,
 	)

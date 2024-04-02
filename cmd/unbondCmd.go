@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/babylonchain/cli-tools/internal/logger"
 	"github.com/babylonchain/cli-tools/internal/services"
@@ -28,12 +30,13 @@ var runUnbondingPipelineCmd = &cobra.Command{
 		}
 
 		log := logger.DefaultLogger()
+
 		pipeLine, err := services.NewUnbondingPipelineFromConfig(log, cfg)
 
 		if err != nil {
 			return err
 		}
 
-		return pipeLine.Run()
+		return pipeLine.Run(context.Background())
 	},
 }

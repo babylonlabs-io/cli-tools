@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -69,7 +70,7 @@ func (s *InMemoryUnbondingStore) AddTxWithSignature(tx *wire.MsgTx, sig *schnorr
 	return nil
 }
 
-func (s *InMemoryUnbondingStore) GetNotProcessedUnbondingTransactions() ([]*UnbondingTxData, error) {
+func (s *InMemoryUnbondingStore) GetNotProcessedUnbondingTransactions(_ context.Context) ([]*UnbondingTxData, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -98,7 +99,7 @@ func (s *InMemoryUnbondingStore) GetNotProcessedUnbondingTransactions() ([]*Unbo
 	return resUnbondingTxData, nil
 }
 
-func (s *InMemoryUnbondingStore) SetUnbondingTransactionProcessed(utx *UnbondingTxData) error {
+func (s *InMemoryUnbondingStore) SetUnbondingTransactionProcessed(_ context.Context, utx *UnbondingTxData) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -113,7 +114,7 @@ func (s *InMemoryUnbondingStore) SetUnbondingTransactionProcessed(utx *Unbonding
 	return nil
 }
 
-func (s *InMemoryUnbondingStore) SetUnbondingTransactionProcessingFailed(utx *UnbondingTxData) error {
+func (s *InMemoryUnbondingStore) SetUnbondingTransactionProcessingFailed(_ context.Context, utx *UnbondingTxData) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

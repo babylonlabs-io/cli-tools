@@ -15,6 +15,7 @@ import (
 
 const (
 	bitcoindContainerName = "bitcoind-test"
+	mongoContainerName    = "mongo-test"
 )
 
 var errRegex = regexp.MustCompile(`(E|e)rror`)
@@ -158,7 +159,7 @@ func (m *Manager) RunBitcoindResource(
 				"-rpcbind=0.0.0.0",
 			},
 		},
-		noRestart,
+		dockerConf,
 	)
 	if err != nil {
 		return nil, err
@@ -178,9 +179,32 @@ func (m *Manager) ClearResources() error {
 	return nil
 }
 
-func noRestart(config *docker.HostConfig) {
+func dockerConf(config *docker.HostConfig) {
 	// in this case we don't want the nodes to restart on failure
 	config.RestartPolicy = docker.RestartPolicy{
 		Name: "no",
 	}
+	config.AutoRemove = true
+}
+
+func (m *Manager) RunMongoDbResource() (*dockertest.Resource, error) {
+	resource, err := m.pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "mongo",
+		Tag:        "7.0",
+		ExposedPorts: []string{
+			"27017",
+		},
+	},
+		dockerConf,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.resources[mongoContainerName] = resource
+	return resource, nil
+}
+
+func (m *Manager) MongoHost() string {
+	return m.resources[mongoContainerName].GetHostPort("27017/tcp")
 }

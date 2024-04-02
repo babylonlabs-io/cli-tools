@@ -34,9 +34,7 @@ type BitcoindTestHandler struct {
 	m *containers.Manager
 }
 
-func NewBitcoindHandler(t *testing.T) *BitcoindTestHandler {
-	m, err := containers.NewManager()
-	require.NoError(t, err)
+func NewBitcoindHandler(t *testing.T, m *containers.Manager) *BitcoindTestHandler {
 	return &BitcoindTestHandler{
 		t: t,
 		m: m,
@@ -54,16 +52,11 @@ func (h *BitcoindTestHandler) Start() {
 	_, err = h.m.RunBitcoindResource(tempPath)
 	require.NoError(h.t, err)
 
-	h.t.Cleanup(func() {
-		_ = h.m.ClearResources()
-	})
-
 	require.Eventually(h.t, func() bool {
 		_, err := h.GetBlockCount()
 		h.t.Logf("failed to get block count: %v", err)
 		return err == nil
 	}, startTimeout, 500*time.Millisecond, "bitcoind did not start")
-
 }
 
 func (h *BitcoindTestHandler) GetBlockCount() (int, error) {

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
@@ -8,12 +9,11 @@ import (
 	staking "github.com/babylonchain/babylon/btcstaking"
 	"github.com/babylonchain/cli-tools/internal/btcclient"
 	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonchain/cli-tools/internal/db"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -27,79 +27,6 @@ var (
 
 func wrapCrititical(err error) error {
 	return fmt.Errorf("%s:%w", err.Error(), ErrCriticalError)
-}
-
-type SystemParams struct {
-	CovenantQuorum     uint32
-	CovenantPublicKeys []*btcec.PublicKey
-}
-
-// TODO This data is necessary to recreate staking script tree, and create proof
-// of inclusion when sending unbonding transaction. Defeine how it should be passed
-// from api to unbodning pipeline and covenant signer
-type StakingInfo struct {
-	StakerPk           *btcec.PublicKey
-	FinalityProviderPk *btcec.PublicKey
-	StakingTime        uint16
-	StakingAmount      btcutil.Amount
-}
-
-type UnbondingTxData struct {
-	UnbondingTransaction     *wire.MsgTx
-	UnbondingTransactionHash *chainhash.Hash
-	UnbondingTransactionSig  *schnorr.Signature
-	// TODO: For now we assume that staking info is part of db
-	StakingInfo *StakingInfo
-}
-
-func NewUnbondingTxData(
-	tx *wire.MsgTx,
-	hash *chainhash.Hash,
-	sig *schnorr.Signature,
-	info *StakingInfo,
-) *UnbondingTxData {
-	return &UnbondingTxData{
-		UnbondingTransaction:     tx,
-		UnbondingTransactionHash: hash,
-		UnbondingTransactionSig:  sig,
-		StakingInfo:              info,
-	}
-}
-
-type PubKeySigPair struct {
-	Signature *schnorr.Signature
-	PubKey    *btcec.PublicKey
-}
-
-// Minimal set of data necessary to sign unbonding transaction
-type SignRequest struct {
-	// Unbonding transaction which should be signed
-	UnbondingTransaction *wire.MsgTx
-	// Staking output which was used to fund unbonding transaction
-	FundingOutput *wire.TxOut
-	//Script of the path which should be execute - unbonding path
-	UnbondingScript []byte
-	// Public key of the signer
-	SignerPubKey *btcec.PublicKey
-}
-
-func NewSignRequest(
-	tx *wire.MsgTx,
-	fundingOutput *wire.TxOut,
-	script []byte,
-	pubKey *btcec.PublicKey,
-) *SignRequest {
-	return &SignRequest{
-		UnbondingTransaction: tx,
-		FundingOutput:        fundingOutput,
-		UnbondingScript:      script,
-		SignerPubKey:         pubKey,
-	}
-}
-
-type CovenantSigner interface {
-	// This interface assumes that covenant signer has access to params and all necessary data
-	SignUnbondingTransaction(req *SignRequest) (*PubKeySigPair, error)
 }
 
 func pubKeyToString(pubKey *btcec.PublicKey) string {
@@ -161,26 +88,6 @@ func (s *StaticSigner) SignUnbondingTransaction(req *SignRequest) (*PubKeySigPai
 	}, nil
 }
 
-type UnbondingStore interface {
-	// TODO: For now it returns all not processed unbonding transactions but should:
-	// 1. either return iterator over view of results
-	// 2. or have limit argument to retrieve only N records
-	// Interface Contract: results should be returned in the order they were added to the store
-	GetNotProcessedUnbondingTransactions() ([]*UnbondingTxData, error)
-
-	SetUnbondingTransactionProcessed(utx *UnbondingTxData) error
-
-	SetUnbondingTransactionProcessingFailed(utx *UnbondingTxData) error
-}
-
-type BtcSender interface {
-	SendTx(tx *wire.MsgTx) (*chainhash.Hash, error)
-}
-
-type ParamsRetriever interface {
-	GetParams() (*SystemParams, error)
-}
-
 type StaticParamsRetriever struct {
 	CovenantQuorum      uint32
 	CovenantPrivateKeys []*btcec.PrivateKey
@@ -222,8 +129,14 @@ func NewUnbondingPipelineFromConfig(
 	logger *slog.Logger,
 	cfg *config.Config,
 ) (*UnbondingPipeline, error) {
-	// TODO: Swtich to mongo after adding support for it
-	store := NewInMemoryUnbondingStore()
+
+	db, err := db.New(context.TODO(), cfg.Db.DbName, cfg.Db.Address)
+
+	if err != nil {
+		return nil, err
+	}
+
+	store := NewPersistentUnbondingStorage(db)
 
 	client, err := btcclient.NewBtcClient(&cfg.Btc)
 
@@ -322,7 +235,7 @@ func (up *UnbondingPipeline) Store() UnbondingStore {
 // 3. Creates witness for unbonding transaction
 // 4. Sends transaction to bitcoin network
 // 5. Marks transaction as processed sending succeded or failed if sending failed
-func (up *UnbondingPipeline) Run() error {
+func (up *UnbondingPipeline) Run(ctx context.Context) error {
 	up.logger.Info("Running unbonding pipeline")
 
 	params, err := up.retriever.GetParams()
@@ -331,7 +244,7 @@ func (up *UnbondingPipeline) Run() error {
 		return err
 	}
 
-	unbondingTransactions, err := up.store.GetNotProcessedUnbondingTransactions()
+	unbondingTransactions, err := up.store.GetNotProcessedUnbondingTransactions(ctx)
 
 	if err != nil {
 		return err
@@ -382,7 +295,7 @@ func (up *UnbondingPipeline) Run() error {
 
 		if err != nil {
 			up.logger.Error("Failed to send unbonding transaction: %v", err)
-			if err := up.store.SetUnbondingTransactionProcessingFailed(utx); err != nil {
+			if err := up.store.SetUnbondingTransactionProcessingFailed(ctx, utx); err != nil {
 				return wrapCrititical(err)
 			}
 		} else {
@@ -390,7 +303,7 @@ func (up *UnbondingPipeline) Run() error {
 				"Succesfully sent unbonding transaction",
 				slog.String("tx_hash", hash.String()),
 			)
-			if err := up.store.SetUnbondingTransactionProcessed(utx); err != nil {
+			if err := up.store.SetUnbondingTransactionProcessed(ctx, utx); err != nil {
 				return wrapCrititical(err)
 			}
 		}
