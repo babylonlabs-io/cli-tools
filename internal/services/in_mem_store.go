@@ -31,10 +31,11 @@ func newUnbondingTxDataWithCounter(
 	hash *chainhash.Hash,
 	sig *schnorr.Signature,
 	info *StakingInfo,
+	sd *StakingTransactionData,
 	counter int,
 ) *unbondingTxDataWithCounter {
 	return &unbondingTxDataWithCounter{
-		UnbondingTxData: *NewUnbondingTxData(tx, hash, sig, info),
+		UnbondingTxData: *NewUnbondingTxData(tx, hash, sig, info, sd),
 		Counter:         counter,
 		state:           inserted,
 	}
@@ -51,7 +52,12 @@ func NewInMemoryUnbondingStore() *InMemoryUnbondingStore {
 	}
 }
 
-func (s *InMemoryUnbondingStore) AddTxWithSignature(tx *wire.MsgTx, sig *schnorr.Signature, info *StakingInfo) error {
+func (s *InMemoryUnbondingStore) AddTxWithSignature(
+	tx *wire.MsgTx,
+	sig *schnorr.Signature,
+	info *StakingInfo,
+	sd *StakingTransactionData,
+) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -65,7 +71,7 @@ func (s *InMemoryUnbondingStore) AddTxWithSignature(tx *wire.MsgTx, sig *schnorr
 
 	nextCounter := len(s.mapping) + 1
 
-	s.mapping[hash] = newUnbondingTxDataWithCounter(tx, &hash, sig, info, nextCounter)
+	s.mapping[hash] = newUnbondingTxDataWithCounter(tx, &hash, sig, info, sd, nextCounter)
 
 	return nil
 }

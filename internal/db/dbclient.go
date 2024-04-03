@@ -5,7 +5,6 @@ import (
 
 	"github.com/babylonchain/cli-tools/internal/db/model"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -43,20 +42,25 @@ func (db *Database) SaveUnbondingDocument(
 	unbondingTxSigHex string,
 	stakerPkHex string,
 	finalityPkHex string,
+	stakingTxHex string,
+	stakingOutputIndex uint64,
+	stakingTxHashHex string,
 	stakingTime uint64,
 	stakingAmount uint64,
 ) error {
 	client := db.Client.Database(db.DbName).Collection(model.UnbondingCollection)
 	document := model.UnbondingDocument{
-		ID:                 primitive.NewObjectID(),
-		UnbondingTxHashHex: unbondingTxHashHex,
-		UnbondingTxHex:     unbondingTxHex,
-		UnbondingTxSigHex:  unbondingTxSigHex,
 		StakerPkHex:        stakerPkHex,
 		FinalityPkHex:      finalityPkHex,
+		UnbondingTxSigHex:  unbondingTxSigHex,
+		State:              model.Inserted,
+		UnbondingTxHashHex: unbondingTxHashHex,
+		UnbondingTxHex:     unbondingTxHex,
+		StakingTxHex:       stakingTxHex,
+		StakingOutputIndex: stakingOutputIndex,
 		StakingTimelock:    stakingTime,
 		StakingAmount:      stakingAmount,
-		State:              model.Inserted,
+		StakingTxHashHex:   stakingTxHashHex,
 	}
 	_, err := client.InsertOne(ctx, document)
 
@@ -64,10 +68,10 @@ func (db *Database) SaveUnbondingDocument(
 
 }
 
-func (db *Database) FindNewUnbondingDocuments(ctx context.Context) ([]model.UnbondingDocument, error) {
+func (db *Database) findUnbondingDocumentsWithState(ctx context.Context, state model.UnbondingState) ([]model.UnbondingDocument, error) {
 	client := db.Client.Database(db.DbName).Collection(model.UnbondingCollection)
 
-	filter := bson.M{"state": model.Inserted}
+	filter := bson.M{"state": state}
 	options := options.Find().SetSort(bson.M{"_id": 1}) // Sorting in ascending order
 
 	cursor, err := client.Find(ctx, filter, options)
@@ -82,6 +86,18 @@ func (db *Database) FindNewUnbondingDocuments(ctx context.Context) ([]model.Unbo
 	}
 
 	return delegations, nil
+}
+
+func (db *Database) FindNewUnbondingDocuments(ctx context.Context) ([]model.UnbondingDocument, error) {
+	return db.findUnbondingDocumentsWithState(ctx, model.Inserted)
+}
+
+func (db *Database) FindFailedUnbodningDocuments(ctx context.Context) ([]model.UnbondingDocument, error) {
+	return db.findUnbondingDocumentsWithState(ctx, model.Failed)
+}
+
+func (db *Database) FindSendUnbondingDocuments(ctx context.Context) ([]model.UnbondingDocument, error) {
+	return db.findUnbondingDocumentsWithState(ctx, model.Send)
 }
 
 func (db *Database) updateUnbondingDocumentState(

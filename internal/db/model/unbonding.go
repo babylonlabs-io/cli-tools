@@ -1,7 +1,5 @@
 package model
 
-import "go.mongodb.org/mongo-driver/bson/primitive"
-
 // TODO Double check with staking-api-service
 const (
 	UnbondingCollection   = "unbonding_queue"
@@ -21,16 +19,15 @@ const (
 )
 
 type UnbondingDocument struct {
-	ID                 primitive.ObjectID `bson:"_id"`
-	UnbondingTxHashHex string             `bson:"unbonding_tx_hash_hex"`
-	UnbondingTxHex     string             `bson:"unbonding_tx_hex"`
-	UnbondingTxSigHex  string             `bson:"unbonding_tx_sig_hex"`
-	StakerPkHex        string             `bson:"staker_pk_hex"`
-	FinalityPkHex      string             `bson:"finality_pk_hex"`
-	StakingTimelock    uint64             `bson:"staking_timelock"`
-	StakingAmount      uint64             `bson:"staking_amount"`
-	// TODO: Staking pkscript is not necessary here as we can derive it from other
-	// staking data + covenant_params. Although maybe it would be worth to have it
-	// here to double check everything is ok
-	State UnbondingState `bson:"state"`
+	StakerPkHex        string         `bson:"staker_pk_hex"`
+	FinalityPkHex      string         `bson:"finality_pk_hex"`
+	UnbondingTxSigHex  string         `bson:"unbonding_tx_sig_hex"`
+	State              UnbondingState `bson:"state"`
+	UnbondingTxHashHex string         `bson:"unbonding_tx_hash_hex"` // Unique Index
+	UnbondingTxHex     string         `bson:"unbonding_tx_hex"`
+	StakingTxHex       string         `bson:"staking_tx_hex"`
+	StakingOutputIndex uint64         `bson:"staking_output_index"`
+	StakingTimelock    uint64         `bson:"staking_timelock"`
+	StakingAmount      uint64         `bson:"staking_amount"`
+	StakingTxHashHex   string         `json:"staking_tx_hash_hex"`
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -229,6 +230,18 @@ func (up *UnbondingPipeline) Store() UnbondingStore {
 	return up.store
 }
 
+func outputsAreEqual(a, b *wire.TxOut) bool {
+	if a.Value != b.Value {
+		return false
+	}
+
+	if !bytes.Equal(a.PkScript, b.PkScript) {
+		return false
+	}
+
+	return true
+}
+
 // Main Pipeline function which:
 // 1. Retrieves unbonding transactions from store in order they were added
 // 2. Sends them to covenant member for signing
@@ -253,7 +266,7 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 	for _, tx := range unbondingTransactions {
 		utx := tx
 
-		stakingOutput, unbondingPathSpendInfo, err := CreateUnbondingPathSpendInfo(
+		stakingOutputRecovered, unbondingPathSpendInfo, err := CreateUnbondingPathSpendInfo(
 			utx.StakingInfo,
 			params,
 			up.btcParams,
@@ -263,9 +276,22 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 			return wrapCrititical(err)
 		}
 
+		stakingOutputFromDb := utx.StakingOutput()
+
+		// This the last line check before sending unbonding transaction for signing. It checks
+		// whether staking output built from all the parameters: stakerPk, finalityProviderPk, stakingTimelock,
+		// covenantPublicKeys, covenantQuorum, stakingAmount is equal to the one stored in db.
+		// Potential reasons why it could fail:
+		// - parameters changed (covenantQuorurm or convenanPks)
+		// - pipeline is run on bad BTC network
+		// - stakingApi service has a bug
+		if !outputsAreEqual(stakingOutputRecovered, stakingOutputFromDb) {
+			return wrapCrititical(fmt.Errorf("staking output from staking tx and staking output re-build from params are different"))
+		}
+
 		sigs, err := up.signUnbondingTransaction(
 			utx.UnbondingTransaction,
-			stakingOutput,
+			stakingOutputRecovered,
 			unbondingPathSpendInfo.RevealedLeaf.Script,
 			params,
 		)

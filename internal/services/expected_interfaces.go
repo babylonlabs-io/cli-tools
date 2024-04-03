@@ -59,9 +59,6 @@ type ParamsRetriever interface {
 	GetParams() (*SystemParams, error)
 }
 
-// TODO This data is necessary to recreate staking script tree, and create proof
-// of inclusion when sending unbonding transaction. Defeine how it should be passed
-// from api to unbodning pipeline and covenant signer
 type StakingInfo struct {
 	StakerPk           *btcec.PublicKey
 	FinalityProviderPk *btcec.PublicKey
@@ -69,12 +66,21 @@ type StakingInfo struct {
 	StakingAmount      btcutil.Amount
 }
 
+type StakingTransactionData struct {
+	StakingTransaction *wire.MsgTx
+	StakingOutputIdx   uint64
+}
+
 type UnbondingTxData struct {
 	UnbondingTransaction     *wire.MsgTx
 	UnbondingTransactionHash *chainhash.Hash
 	UnbondingTransactionSig  *schnorr.Signature
-	// TODO: For now we assume that staking info is part of db
-	StakingInfo *StakingInfo
+	StakingInfo              *StakingInfo
+	StakingTransactionData   *StakingTransactionData
+}
+
+func (u UnbondingTxData) StakingOutput() *wire.TxOut {
+	return u.StakingTransactionData.StakingTransaction.TxOut[u.StakingTransactionData.StakingOutputIdx]
 }
 
 func NewUnbondingTxData(
@@ -82,12 +88,14 @@ func NewUnbondingTxData(
 	hash *chainhash.Hash,
 	sig *schnorr.Signature,
 	info *StakingInfo,
+	sd *StakingTransactionData,
 ) *UnbondingTxData {
 	return &UnbondingTxData{
 		UnbondingTransaction:     tx,
 		UnbondingTransactionHash: hash,
 		UnbondingTransactionSig:  sig,
 		StakingInfo:              info,
+		StakingTransactionData:   sd,
 	}
 }
 
