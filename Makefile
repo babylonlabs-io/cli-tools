@@ -1,3 +1,4 @@
+DOCKER = $(shell which docker)
 BUILDDIR ?= $(CURDIR)/build
 
 PACKAGES_E2E=$(shell go list ./... | grep '/itest')
@@ -27,7 +28,11 @@ $(BUILD_TARGETS): go.sum $(BUILDDIR)/
 $(BUILDDIR)/:
 	mkdir -p $(BUILDDIR)/
 
-.PHONY: build install tests
+build-docker:
+	$(DOCKER) build --tag babylonchain/cli-tools -f Dockerfile \
+		$(shell git rev-parse --show-toplevel)
+
+.PHONY: build build-docker install tests
 
 generate-mock-interface:
 	cd internal/db && mockery --name=DBClient --output=../../tests/mocks --outpkg=dbmock --filename=mock_db_client.go
