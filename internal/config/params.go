@@ -7,49 +7,56 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 )
 
-type UnsafeParamsConfig struct {
-	CovenantPrivateKeys []string `mapstructure:"covenant_private_keys"`
-	CovenantQuorum      uint64   `mapstructure:"covenant_quorum"`
+type ParamsConfig struct {
+	CovenantPublicKeys []string `mapstructure:"covenant_public_keys"`
+	CovenantQuorum     uint32   `mapstructure:"covenant_quorum"`
+	MagicBytes         string   `mapstructure:"magic_bytes"`
 }
 
-func DefaultUnsafeParamsConfig() *UnsafeParamsConfig {
-	privKey, err := btcec.NewPrivateKey()
-	if err != nil {
-		panic(err)
-	}
-
-	encoded := hex.EncodeToString(privKey.Serialize())
-
-	return &UnsafeParamsConfig{
-		CovenantPrivateKeys: []string{encoded},
-		CovenantQuorum:      1,
+func DefaultParamsConfig() *ParamsConfig {
+	return &ParamsConfig{
+		CovenantPublicKeys: []string{},
+		CovenantQuorum:     0,
+		MagicBytes:         "01020304",
 	}
 }
 
-type ParsedUnsafeParamsConfig struct {
-	CovenantPrivateKeys []*btcec.PrivateKey
-	CovenantQuorum      uint32
+type ParsedParamsConfig struct {
+	CovenantPublicKeys []*btcec.PublicKey
+	CovenantQuorum     uint32
+	MagicBytes         []byte
 }
 
-func (cfg *UnsafeParamsConfig) Parse() (*ParsedUnsafeParamsConfig, error) {
-	var covenantPrivateKeys []*btcec.PrivateKey
+func (c *ParamsConfig) Parse() (*ParsedParamsConfig, error) {
+	var covenantPublicKeys []*btcec.PublicKey
 
-	for _, key := range cfg.CovenantPrivateKeys {
-		decoded, err := hex.DecodeString(key)
+	for _, key := range c.CovenantPublicKeys {
+		decodedBytes, err := hex.DecodeString(key)
+
 		if err != nil {
 			return nil, err
 		}
 
-		privKey, _ := btcec.PrivKeyFromBytes(decoded)
-		covenantPrivateKeys = append(covenantPrivateKeys, privKey)
+		pk, err := btcec.ParsePubKey(decodedBytes)
+		if err != nil {
+			return nil, err
+		}
+		covenantPublicKeys = append(covenantPublicKeys, pk)
 	}
 
-	if len(covenantPrivateKeys) < int(cfg.CovenantQuorum) {
-		return nil, fmt.Errorf("not enough private keys for the quorum")
+	magicBytes, err := hex.DecodeString(c.MagicBytes)
+
+	if err != nil {
+		return nil, err
 	}
 
-	return &ParsedUnsafeParamsConfig{
-		CovenantPrivateKeys: covenantPrivateKeys,
-		CovenantQuorum:      uint32(cfg.CovenantQuorum),
+	if len(magicBytes) != 4 {
+		return nil, fmt.Errorf("invalid magic bytes length. Magic bytes should be 4 bytes long")
+	}
+
+	return &ParsedParamsConfig{
+		CovenantPublicKeys: covenantPublicKeys,
+		CovenantQuorum:     c.CovenantQuorum,
+		MagicBytes:         magicBytes,
 	}, nil
 }

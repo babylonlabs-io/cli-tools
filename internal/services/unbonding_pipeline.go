@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	staking "github.com/babylonchain/babylon/btcstaking"
 	"github.com/babylonchain/cli-tools/internal/btcclient"
 	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/babylonchain/cli-tools/internal/db"
@@ -34,86 +33,29 @@ func pubKeyToString(pubKey *btcec.PublicKey) string {
 	return hex.EncodeToString(schnorr.SerializePubKey(pubKey))
 }
 
-// signer with initialized in memory private keys
-type StaticSigner struct {
-	mapPubKey map[string]*btcec.PrivateKey
+type SystemParamsRetriever struct {
+	CovenantPublicKeys []*btcec.PublicKey
+	CovenantQuorum     uint32
+	MagicBytes         []byte
 }
 
-func NewStaticSigner(privateKeys []*btcec.PrivateKey) (*StaticSigner, error) {
-	if len(privateKeys) == 0 {
-		return nil, fmt.Errorf("no private keys provided for static signer")
-	}
-
-	mapPubKey := make(map[string]*btcec.PrivateKey)
-
-	for _, priv := range privateKeys {
-		k := priv
-
-		pubKeyHex := pubKeyToString(k.PubKey())
-
-		if _, found := mapPubKey[pubKeyHex]; found {
-			return nil, fmt.Errorf("duplicate public key provided for static signer")
-		}
-
-		mapPubKey[pubKeyHex] = k
-	}
-
-	return &StaticSigner{
-		mapPubKey: mapPubKey,
-	}, nil
-}
-
-func (s *StaticSigner) SignUnbondingTransaction(req *SignRequest) (*PubKeySigPair, error) {
-	pubKeyStr := pubKeyToString(req.SignerPubKey)
-
-	privKey, found := s.mapPubKey[pubKeyStr]
-
-	if !found {
-		return nil, fmt.Errorf("private key not found for public key %s", pubKeyStr)
-	}
-
-	signature, err := staking.SignTxWithOneScriptSpendInputFromScript(
-		req.UnbondingTransaction,
-		req.FundingOutput,
-		privKey,
-		req.UnbondingScript,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &PubKeySigPair{
-		Signature: signature,
-		PubKey:    req.SignerPubKey,
-	}, nil
-}
-
-type StaticParamsRetriever struct {
-	CovenantQuorum      uint32
-	CovenantPrivateKeys []*btcec.PrivateKey
-}
-
-func NewStaticParamsRetriever(
+func NewSystemParamsRetriever(
 	quorum uint32,
-	privateKeys []*btcec.PrivateKey,
-) *StaticParamsRetriever {
-	return &StaticParamsRetriever{
-		CovenantQuorum:      quorum,
-		CovenantPrivateKeys: privateKeys,
+	pubKeys []*btcec.PublicKey,
+	magicBytes []byte,
+) *SystemParamsRetriever {
+	return &SystemParamsRetriever{
+		CovenantQuorum:     quorum,
+		CovenantPublicKeys: pubKeys,
+		MagicBytes:         magicBytes,
 	}
 }
 
-func (p *StaticParamsRetriever) GetParams() (*SystemParams, error) {
-	publicKeys := make([]*btcec.PublicKey, 0, len(p.CovenantPrivateKeys))
-
-	for _, pk := range p.CovenantPrivateKeys {
-		publicKeys = append(publicKeys, pk.PubKey())
-	}
-
+func (p *SystemParamsRetriever) GetParams() (*SystemParams, error) {
 	return &SystemParams{
 		CovenantQuorum:     p.CovenantQuorum,
-		CovenantPublicKeys: publicKeys,
+		CovenantPublicKeys: p.CovenantPublicKeys,
+		MagicBytes:         p.MagicBytes,
 	}, nil
 }
 
@@ -145,22 +87,28 @@ func NewUnbondingPipelineFromConfig(
 		return nil, err
 	}
 
+	parsedRemoteSignerCfg, err := cfg.Signer.Parse()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse remote signer config: %w", err)
+	}
+
+	signer, err := NewRemoteSigner(parsedRemoteSignerCfg)
+
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO: Add parse func to other configs, and do parsing in one place
 	parsedParams, err := cfg.Params.Parse()
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse params: %w", err)
 	}
 
-	signer, err := NewStaticSigner(parsedParams.CovenantPrivateKeys)
-
-	if err != nil {
-		return nil, err
-	}
-
-	paramsRetriever := NewStaticParamsRetriever(
+	paramsRetriever := NewSystemParamsRetriever(
 		parsedParams.CovenantQuorum,
-		parsedParams.CovenantPrivateKeys,
+		parsedParams.CovenantPublicKeys,
+		parsedParams.MagicBytes,
 	)
 
 	return NewUnbondingPipeline(
@@ -292,7 +240,7 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 		sigs, err := up.signUnbondingTransaction(
 			utx.UnbondingTransaction,
 			stakingOutputRecovered,
-			unbondingPathSpendInfo.RevealedLeaf.Script,
+			stakingOutputRecovered.PkScript,
 			params,
 		)
 

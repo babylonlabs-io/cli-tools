@@ -11,6 +11,17 @@ import (
 	"time"
 
 	staking "github.com/babylonchain/babylon/btcstaking"
+	signerbtccli "github.com/babylonchain/covenant-signer/btcclient"
+	signercfg "github.com/babylonchain/covenant-signer/config"
+	"github.com/babylonchain/covenant-signer/signerapp"
+	"github.com/babylonchain/covenant-signer/signerservice"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
@@ -20,19 +31,14 @@ import (
 	"github.com/babylonchain/cli-tools/internal/logger"
 	"github.com/babylonchain/cli-tools/internal/services"
 	"github.com/babylonchain/cli-tools/itest/containers"
-	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/stretchr/testify/require"
+)
+
+const (
+	passphrase = "pass"
 )
 
 var (
-	netParams              = &chaincfg.RegressionNetParams
-	eventuallyPollInterval = 100 * time.Millisecond
-	eventuallyTimeout      = 10 * time.Second
+	netParams = &chaincfg.RegressionNetParams
 )
 
 type TestManager struct {
@@ -40,7 +46,7 @@ type TestManager struct {
 	bitcoindHandler     *BitcoindTestHandler
 	walletPass          string
 	btcClient           *btcclient.BtcClient
-	covenantKeys        []*btcec.PrivateKey
+	covenantPublicKeys  []*btcec.PublicKey
 	covenantQuorum      uint32
 	finalityProviderKey *btcec.PrivateKey
 	stakerAddress       btcutil.Address
@@ -50,6 +56,7 @@ type TestManager struct {
 	pipeLineConfig      *config.Config
 	pipeLine            *services.UnbondingPipeline
 	testStoreController *services.PersistentUnbondingStorage
+	signingServer       *signerservice.SigningServer
 }
 
 type stakingData struct {
@@ -64,7 +71,7 @@ func defaultStakingData() *stakingData {
 	return &stakingData{
 		stakingAmount:  btcutil.Amount(100000),
 		stakingTime:    10000,
-		stakingFeeRate: btcutil.Amount(5000), //feeRatePerKb
+		stakingFeeRate: btcutil.Amount(5000), // feeRatePerKb
 		unbondingTime:  100,
 		unbondingFee:   btcutil.Amount(10000),
 	}
@@ -109,24 +116,9 @@ func StartManager(
 	// Give some time to launch mongo and bitcoind
 	time.Sleep(2 * time.Second)
 
-	passphrase := "pass"
 	_ = h.CreateWallet("test-wallet", passphrase)
 	// only outputs which are 100 deep are mature
 	_ = h.GenerateBlocks(int(numMatureOutputsInWallet) + 100)
-
-	numCovenantKeys := 3
-	quorum := uint32(2)
-	var coventantKeys []*btcec.PrivateKey
-	for i := 0; i < numCovenantKeys; i++ {
-		key, err := btcec.NewPrivateKey()
-		require.NoError(t, err)
-		coventantKeys = append(coventantKeys, key)
-	}
-
-	var covenantKeysStrings []string
-	for _, key := range coventantKeys {
-		covenantKeysStrings = append(covenantKeysStrings, hex.EncodeToString(key.Serialize()))
-	}
 
 	appConfig := config.DefaultConfig()
 
@@ -135,8 +127,15 @@ func StartManager(
 	appConfig.Btc.Pass = "pass"
 	appConfig.Btc.Network = netParams.Name
 
-	appConfig.Params.CovenantPrivateKeys = covenantKeysStrings
-	appConfig.Params.CovenantQuorum = uint64(quorum)
+	magicBytes := []byte{0x0, 0x1, 0x2, 0x3}
+	signerCfg, quorum, signingServer := startSigningServer(t, magicBytes)
+	parsedSignerCfg, err := signerCfg.Parse()
+	require.NoError(t, err)
+	covenantPublicKeysStr := pubKeysToString(parsedSignerCfg.PublicKeys)
+
+	appConfig.Signer = *signerCfg
+	appConfig.Params.CovenantPublicKeys = covenantPublicKeysStr
+	appConfig.Params.CovenantQuorum = quorum
 	appConfig.Db.Address = fmt.Sprintf("mongodb://%s", m.MongoHost())
 
 	// Client for testing purposes
@@ -153,7 +152,7 @@ func StartManager(
 	walletAddress, err := btcutil.DecodeAddress(output.Address, netParams)
 	require.NoError(t, err)
 
-	err = client.UnlockWallet(20, passphrase)
+	err = client.UnlockWallet(60*60*60, passphrase)
 	require.NoError(t, err)
 	stakerPrivKey, err := client.DumpPrivateKey(walletAddress)
 	require.NoError(t, err)
@@ -172,12 +171,13 @@ func StartManager(
 	)
 	require.NoError(t, err)
 
+	require.NoError(t, err)
 	return &TestManager{
 		t:                   t,
 		bitcoindHandler:     h,
 		walletPass:          passphrase,
 		btcClient:           client,
-		covenantKeys:        coventantKeys,
+		covenantPublicKeys:  parsedSignerCfg.PublicKeys,
 		covenantQuorum:      quorum,
 		finalityProviderKey: fpKey,
 		stakerAddress:       walletAddress,
@@ -187,16 +187,113 @@ func StartManager(
 		pipeLineConfig:      appConfig,
 		pipeLine:            pipeLine,
 		testStoreController: storeController,
+		signingServer:       signingServer,
 	}
 }
 
-func (tm *TestManager) covenantPubKeys() []*btcec.PublicKey {
-	var pubKeys []*btcec.PublicKey
-	for _, key := range tm.covenantKeys {
-		k := key
-		pubKeys = append(pubKeys, k.PubKey())
+func startSigningServer(
+	t *testing.T,
+	magicBytes []byte,
+) (*config.RemoteSignerConfig, uint32, *signerservice.SigningServer) {
+	appConfig := signercfg.DefaultConfig()
+	logger := logger.DefaultLogger()
+	appConfig.BtcNodeConfig.Host = "127.0.0.1:18443"
+	appConfig.BtcNodeConfig.User = "user"
+	appConfig.BtcNodeConfig.Pass = "pass"
+	appConfig.BtcNodeConfig.Network = netParams.Name
+
+	fakeParsedConfig, err := appConfig.Parse()
+	require.NoError(t, err)
+	// Client for testing purposes
+	client, err := signerbtccli.NewBtcClient(fakeParsedConfig.BtcNodeConfig)
+	require.NoError(t, err)
+
+	// Unlock wallet for all tests 60min
+	err = client.UnlockWallet(60*60*60, passphrase)
+	require.NoError(t, err)
+
+	// generate 2 local covenants
+	covPublicKeys := make([]*btcec.PublicKey, 0)
+	covAddress1, err := client.RpcClient.GetNewAddress("covenant1")
+	require.NoError(t, err)
+	info1, err := client.RpcClient.GetAddressInfo(covAddress1.EncodeAddress())
+	require.NoError(t, err)
+	covenantPubKeyBytes1, err := hex.DecodeString(*info1.PubKey)
+	require.NoError(t, err)
+	localCovenantKey1, err := btcec.ParsePubKey(covenantPubKeyBytes1)
+	require.NoError(t, err)
+	covPublicKeys = append(covPublicKeys, localCovenantKey1)
+
+	covAddress2, err := client.RpcClient.GetNewAddress("covenant2")
+	require.NoError(t, err)
+	info2, err := client.RpcClient.GetAddressInfo(covAddress2.EncodeAddress())
+	require.NoError(t, err)
+	covenantPubKeyBytes2, err := hex.DecodeString(*info2.PubKey)
+	require.NoError(t, err)
+	localCovenantKey2, err := btcec.ParsePubKey(covenantPubKeyBytes2)
+	require.NoError(t, err)
+	covPublicKeys = append(covPublicKeys, localCovenantKey2)
+
+	quorum := uint32(2)
+	host := "127.0.0.1"
+	port := 9791
+	covenantPksStr := []string{
+		hex.EncodeToString(localCovenantKey1.SerializeCompressed()),
+		hex.EncodeToString(localCovenantKey2.SerializeCompressed()),
 	}
-	return pubKeys
+	urlsStr := []string{
+		fmt.Sprintf("http://%s@%s:%d", covenantPksStr[0], host, port),
+		fmt.Sprintf("http://%s@%s:%d", covenantPksStr[1], host, port),
+	}
+	signerCfg := &config.RemoteSignerConfig{
+		Urls:    urlsStr,
+		Timeout: 10 * time.Second,
+	}
+
+	appConfig.Server.Host = host
+	appConfig.Server.Port = port
+	appConfig.Params.CovenantQuorum = quorum
+	appConfig.Params.MagicBytes = hex.EncodeToString(magicBytes)
+	appConfig.Params.W = 1
+	appConfig.Params.CovenantPublicKeys = covenantPksStr
+
+	parsedconfig, err := appConfig.Parse()
+	require.NoError(t, err)
+
+	// In e2e test we are using the same node for signing as for indexing functionalities
+	chainInfo := signerapp.NewBitcoindChainInfo(client)
+	signer := signerapp.NewPrivKeySigner(client)
+	paramsGetter := signerapp.NewConfigParamsRetriever(parsedconfig.ParamsConfig)
+
+	app := signerapp.NewSignerApp(
+		logger,
+		signer,
+		chainInfo,
+		paramsGetter,
+		netParams,
+	)
+
+	server, err := signerservice.New(
+		context.Background(),
+		logger,
+		parsedconfig,
+		app,
+	)
+
+	require.NoError(t, err)
+
+	go func() {
+		_ = server.Start()
+	}()
+
+	// Give some time to launch server
+	time.Sleep(3 * time.Second)
+
+	t.Cleanup(func() {
+		_ = server.Stop(context.TODO())
+	})
+
+	return signerCfg, quorum, server
 }
 
 type stakingTxSigInfo struct {
@@ -209,7 +306,7 @@ func (tm *TestManager) sendStakingTxToBtc(d *stakingData) *stakingTxSigInfo {
 		tm.magicBytes,
 		tm.stakerPubKey,
 		tm.finalityProviderKey.PubKey(),
-		tm.covenantPubKeys(),
+		tm.covenantPublicKeys,
 		tm.covenantQuorum,
 		d.stakingTime,
 		d.stakingAmount,
@@ -251,7 +348,7 @@ func (tm *TestManager) createUnbondingTxAndSignByStaker(
 		tm.magicBytes,
 		tm.stakerPubKey,
 		tm.finalityProviderKey.PubKey(),
-		tm.covenantPubKeys(),
+		tm.covenantPublicKeys,
 		tm.covenantQuorum,
 		d.stakingTime,
 		d.stakingAmount,
@@ -265,7 +362,7 @@ func (tm *TestManager) createUnbondingTxAndSignByStaker(
 	unbondingInfo, err := staking.BuildUnbondingInfo(
 		tm.stakerPubKey,
 		[]*btcec.PublicKey{tm.finalityProviderKey.PubKey()},
-		tm.covenantPubKeys(),
+		tm.covenantPublicKeys,
 		tm.covenantQuorum,
 		d.unbondingTime,
 		d.unbondingAmount(),
@@ -385,4 +482,14 @@ func TestRunningPipeline(t *testing.T) {
 	sendTransactions, err := m.testStoreController.GetSendUnbondingTransactions(context.TODO())
 	require.NoError(t, err)
 	require.Len(t, sendTransactions, numUnbondingTxs)
+}
+
+func pubKeysToString(pubKeys []*btcec.PublicKey) []string {
+	pubKeysStr := make([]string, len(pubKeys))
+	for i, pk := range pubKeys {
+		pkStr := hex.EncodeToString(pk.SerializeCompressed())
+		pubKeysStr[i] = pkStr
+	}
+
+	return pubKeysStr
 }

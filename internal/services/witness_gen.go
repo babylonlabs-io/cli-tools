@@ -57,9 +57,10 @@ func CreateUnbondingPathSpendInfo(
 	params *SystemParams,
 	net *chaincfg.Params,
 ) (*wire.TxOut, *staking.SpendInfo, error) {
-	info, err := staking.BuildStakingInfo(
+	info, err := staking.BuildV0IdentifiableStakingOutputs(
+		params.MagicBytes,
 		stakingInfo.StakerPk,
-		[]*btcec.PublicKey{stakingInfo.FinalityProviderPk},
+		stakingInfo.FinalityProviderPk,
 		params.CovenantPublicKeys,
 		params.CovenantQuorum,
 		stakingInfo.StakingTimelock,
@@ -68,7 +69,7 @@ func CreateUnbondingPathSpendInfo(
 	)
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build unbonding spend info: %w", err)
+		return nil, nil, fmt.Errorf("failed to build staking info: %w", err)
 	}
 
 	unbondingPathInfo, err := info.UnbondingPathSpendInfo()

@@ -51,8 +51,9 @@ type BtcSender interface {
 }
 
 type SystemParams struct {
-	CovenantQuorum     uint32
 	CovenantPublicKeys []*btcec.PublicKey
+	CovenantQuorum     uint32
+	MagicBytes         []byte
 }
 
 type ParamsRetriever interface {
