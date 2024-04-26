@@ -262,6 +262,7 @@ func startSigningServer(
 
 	// In e2e test we are using the same node for signing as for indexing functionalities
 	chainInfo := signerapp.NewBitcoindChainInfo(client)
+	// TODO: Use signer with psbt, this require some changes in tests
 	signer := signerapp.NewPrivKeySigner(client)
 	paramsGetter := signerapp.NewConfigParamsRetriever(parsedconfig.ParamsConfig)
 
