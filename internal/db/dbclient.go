@@ -3,10 +3,11 @@ package db
 import (
 	"context"
 
-	"github.com/babylonchain/cli-tools/internal/db/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/babylonchain/cli-tools/internal/db/model"
 )
 
 type Database struct {
@@ -121,4 +122,10 @@ func (db *Database) SetUnbondingDocumentFailed(
 	ctx context.Context,
 	unbondingTxHashHex string) error {
 	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.Failed)
+}
+
+func (db *Database) SetUnbondingDocumentInputAlreadySpent(
+	ctx context.Context,
+	unbondingTxHashHex string) error {
+	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.InputAlreadySpent)
 }

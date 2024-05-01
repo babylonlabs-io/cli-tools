@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
@@ -15,6 +14,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/wallet/txauthor"
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
+
+	"github.com/babylonchain/cli-tools/internal/config"
 )
 
 type TxStatus int
@@ -73,6 +74,20 @@ func NewBtcClient(cfg *config.BtcConfig) (*BtcClient, error) {
 
 func (c *BtcClient) SendTx(tx *wire.MsgTx) (*chainhash.Hash, error) {
 	return c.rpcClient.SendRawTransaction(tx, true)
+}
+
+// CheckTxOutSpendable checks whether the tx output has been spent
+func (c *BtcClient) CheckTxOutSpendable(txHash *chainhash.Hash, index uint32, mempool bool) (bool, error) {
+	res, err := c.rpcClient.GetTxOut(txHash, index, mempool)
+	if err != nil {
+		return false, err
+	}
+
+	if res == nil {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // Helpers to easily build transactions

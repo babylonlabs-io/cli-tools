@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/hex"
 
-	"github.com/babylonchain/cli-tools/internal/db"
-	"github.com/babylonchain/cli-tools/internal/db/model"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+
+	"github.com/babylonchain/cli-tools/internal/db"
+	"github.com/babylonchain/cli-tools/internal/db/model"
 )
 
 func newBTCTxFromBytes(txBytes []byte) (*wire.MsgTx, error) {
@@ -236,6 +237,11 @@ func (s *PersistentUnbondingStorage) SetUnbondingTransactionProcessed(ctx contex
 }
 
 func (s *PersistentUnbondingStorage) SetUnbondingTransactionProcessingFailed(ctx context.Context, utx *UnbondingTxData) error {
+	txHash := utx.UnbondingTransactionHash.String()
+	return s.client.SetUnbondingDocumentFailed(ctx, txHash)
+}
+
+func (s *PersistentUnbondingStorage) SetUnbondingTransactionInputAlreadySpent(ctx context.Context, utx *UnbondingTxData) error {
 	txHash := utx.UnbondingTransactionHash.String()
 	return s.client.SetUnbondingDocumentFailed(ctx, txHash)
 }

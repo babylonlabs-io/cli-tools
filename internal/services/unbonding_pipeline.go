@@ -300,6 +300,23 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 		// We assume that this is valid unbodning transaction, with 1 input
 		utx.UnbondingTransaction.TxIn[0].Witness = witness
 
+		// Check whether the staking output has been spent, skip it and mark it in db if so
+		stakingTxHash := utx.StakingTransactionData.StakingTransaction.TxHash()
+		// TODO do we need to check the mempool?
+		spendable, err := up.sender.CheckTxOutSpendable(&stakingTxHash, uint32(utx.StakingTransactionData.StakingOutputIdx), true)
+		if err != nil {
+			up.logger.Error("Failed to check whether the staking output is spendable", "error", err)
+			// will still try to send the tx
+		}
+		if err == nil && !spendable {
+			up.logger.Info("The input of the unbonding transaction has already been spent",
+				slog.String("staking_tx_hash", stakingTxHash.String()))
+			if err := up.store.SetUnbondingTransactionInputAlreadySpent(ctx, utx); err != nil {
+				return wrapCrititical(err)
+			}
+			continue
+		}
+
 		hash, err := up.sender.SendTx(utx.UnbondingTransaction)
 
 		if err != nil {

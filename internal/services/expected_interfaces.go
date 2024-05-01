@@ -53,6 +53,7 @@ type CovenantSigner interface {
 
 type BtcSender interface {
 	SendTx(tx *wire.MsgTx) (*chainhash.Hash, error)
+	CheckTxOutSpendable(txHash *chainhash.Hash, index uint32, mempool bool) (bool, error)
 }
 
 type SystemParams struct {
@@ -115,4 +116,6 @@ type UnbondingStore interface {
 	SetUnbondingTransactionProcessed(ctx context.Context, utx *UnbondingTxData) error
 
 	SetUnbondingTransactionProcessingFailed(ctx context.Context, utx *UnbondingTxData) error
+
+	SetUnbondingTransactionInputAlreadySpent(ctx context.Context, utx *UnbondingTxData) error
 }

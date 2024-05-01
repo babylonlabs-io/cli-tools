@@ -134,3 +134,18 @@ func (s *InMemoryUnbondingStore) SetUnbondingTransactionProcessingFailed(_ conte
 
 	return nil
 }
+
+func (s *InMemoryUnbondingStore) SetUnbondingTransactionInputAlreadySpent(_ context.Context, utx *UnbondingTxData) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, exists := s.mapping[*utx.UnbondingTransactionHash]
+
+	if !exists {
+		return fmt.Errorf("tx with hash %s does not exist", *utx.UnbondingTransactionHash)
+	}
+
+	tx.state = inputAlreadySpent
+
+	return nil
+}
