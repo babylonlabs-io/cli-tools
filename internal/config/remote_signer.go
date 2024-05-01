@@ -12,7 +12,7 @@ import (
 const (
 	defaultHost    = "http://127.0.0.1"
 	defaultPort    = 9791
-	defaultTimeout = 10 * time.Second
+	defaultTimeout = 2 * time.Second
 )
 
 var (

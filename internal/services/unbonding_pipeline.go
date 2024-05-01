@@ -139,39 +139,70 @@ func NewUnbondingPipeline(
 	}
 }
 
+// signUnbondingTransaction requests signatures from all the
+// covenant signers in a concurrent manner
 func (up *UnbondingPipeline) signUnbondingTransaction(
 	unbondingTransaction *wire.MsgTx,
 	fundingOutput *wire.TxOut,
 	unbondingScript []byte,
 	params *SystemParams,
 ) ([]*PubKeySigPair, error) {
-	var requests []*SignRequest
-
-	// TODO: Naive serialized way. In practice request shoud be done:
-	// - in parallel
-	// - only params.CovenantQuorum/len(params.CovenantPublicKeys) is required to succeed
+	// send requests concurrently
+	resultChan := make(chan *SignResult, len(params.CovenantPublicKeys))
 	for _, pk := range params.CovenantPublicKeys {
-		requests = append(requests, NewSignRequest(
+		req := NewSignRequest(
 			unbondingTransaction,
 			fundingOutput,
 			unbondingScript,
 			pk,
-		))
+		)
+		go up.requestSigFromCovenant(req, resultChan)
 	}
 
+	// check all the results
+	// Note that the latency of processing all the results depends on
+	// the slowest response
 	var signatures []*PubKeySigPair
-
-	for _, req := range requests {
-		sig, err := up.signer.SignUnbondingTransaction(req)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to sign unbonding tx: %w", err)
+	for i := 0; i < len(params.CovenantPublicKeys); i++ {
+		res := <-resultChan
+		if res.Err != nil {
+			continue
 		}
-
-		signatures = append(signatures, sig)
+		signatures = append(signatures, res.PubKeySig)
 	}
 
-	return signatures, nil
+	if len(signatures) < int(params.CovenantQuorum) {
+		return nil, fmt.Errorf("insufficient covenant signatures: expected %d, got: %d",
+			params.CovenantQuorum, len(signatures))
+	}
+
+	// return a quorum is enough as the script is using OP_NUMEQUAL op code
+	// ordered by the order of arrival
+	return signatures[:params.CovenantQuorum], nil
+}
+
+func (up *UnbondingPipeline) requestSigFromCovenant(req *SignRequest, resultChan chan *SignResult) {
+	pkStr := pubKeyToString(req.SignerPubKey)
+	up.logger.Debug("request signatures from covenant signer",
+		"signer_pk", pkStr)
+
+	var res SignResult
+	sigPair, err := up.signer.SignUnbondingTransaction(req)
+	if err != nil {
+		// TODO record metrics
+		up.logger.Error("failed to get signatures from covenant",
+			"signer_pk", pkStr,
+			"error", res.Err)
+
+		res.Err = err
+	} else {
+		// TODO: record metrics
+		up.logger.Debug("got signatures from covenant signer", "signer_pk", pkStr)
+
+		res.PubKeySig = sigPair
+	}
+
+	resultChan <- &res
 }
 
 func (up *UnbondingPipeline) Store() UnbondingStore {
@@ -248,6 +279,10 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 			return wrapCrititical(err)
 		}
 
+		up.logger.Info("Successfully collected quorum of covenant signatures to unbond",
+			"staking_tx_hash", tx.StakingTransactionData.StakingTransaction.TxHash().String(),
+			"unbonding_tx_hash", tx.UnbondingTransactionHash.String())
+
 		// TODO this functions re-creates staking output, maybe we should compare it with
 		// staking output from db for double check
 		witness, err := CreateUnbondingTxWitness(
@@ -268,13 +303,13 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 		hash, err := up.sender.SendTx(utx.UnbondingTransaction)
 
 		if err != nil {
-			up.logger.Error("Failed to send unbonding transaction: %v", err)
+			up.logger.Error("Failed to send unbonding transaction", "error", err)
 			if err := up.store.SetUnbondingTransactionProcessingFailed(ctx, utx); err != nil {
 				return wrapCrititical(err)
 			}
 		} else {
 			up.logger.Info(
-				"Succesfully sent unbonding transaction",
+				"Successfully sent unbonding transaction",
 				slog.String("tx_hash", hash.String()),
 			)
 			if err := up.store.SetUnbondingTransactionProcessed(ctx, utx); err != nil {

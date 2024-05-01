@@ -22,6 +22,11 @@ type SignRequest struct {
 	SignerPubKey *btcec.PublicKey
 }
 
+type SignResult struct {
+	PubKeySig *PubKeySigPair
+	Err       error
+}
+
 func NewSignRequest(
 	tx *wire.MsgTx,
 	fundingOutput *wire.TxOut,
