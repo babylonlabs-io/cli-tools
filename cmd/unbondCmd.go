@@ -29,9 +29,21 @@ var runUnbondingPipelineCmd = &cobra.Command{
 			return err
 		}
 
+		globalParamPath, err := cmd.Flags().GetString(globalParamKey)
+
+		if err != nil {
+			return err
+		}
+
+		parsedGlobalParams, err := services.NewGlobalParams(globalParamPath)
+
+		if err != nil {
+			return err
+		}
+
 		log := logger.DefaultLogger()
 
-		pipeLine, err := services.NewUnbondingPipelineFromConfig(log, cfg)
+		pipeLine, err := services.NewUnbondingPipelineFromConfig(log, cfg, parsedGlobalParams)
 
 		if err != nil {
 			return err

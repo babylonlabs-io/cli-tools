@@ -14,7 +14,6 @@ import (
 type Config struct {
 	Db     DbConfig           `mapstructure:"db-config"`
 	Btc    BtcConfig          `mapstructure:"btc-config"`
-	Params ParamsConfig       `mapstructure:"params-config"`
 	Signer RemoteSignerConfig `mapstructure:"remote-signer-config"`
 }
 
@@ -22,7 +21,6 @@ func DefaultConfig() *Config {
 	return &Config{
 		Db:     *DefaultDBConfig(),
 		Btc:    *DefaultBtcConfig(),
-		Params: *DefaultParamsConfig(),
 		Signer: *DefaultRemoteSignerConfig(),
 	}
 }
@@ -58,19 +56,11 @@ pass = "{{ .Btc.Pass }}"
 # Btc network (testnet3|mainnet|regtest|simnet|signet)
 network = "{{ .Btc.Network }}"
 
-[params-config]
-# The list of covenant public keys in 33 bytes compressed format
-covenant_public_keys = [{{ range .Params.CovenantPublicKeys }}{{ printf "%q, " . }}{{end}}]
-# The quorum of the covenants required to sign the transaction
-covenant_quorum = {{ .Params.CovenantQuorum }}
-# The magic bytes of the network
-magic_bytes = "{{ .Params.MagicBytes }}"
-
 [remote-signer-config]
 # The list of signer urls in the format http://covenant_pk@signer_host:port
 urls = [{{ range .Signer.Urls }}{{ printf "%q, " . }}{{end}}]
 # The timeout of each request to the remote signing server
-timeout = {{ .Signer.Timeout }}
+timeout_seconds = {{ .Signer.TimeoutSeconds }}
 `
 
 var configTemplate *template.Template

@@ -51,7 +51,13 @@ type CovenantSigner interface {
 	SignUnbondingTransaction(req *SignRequest) (*PubKeySigPair, error)
 }
 
+type TxInfo struct {
+	Tx                *wire.MsgTx
+	TxInclusionHeight uint32
+}
+
 type BtcSender interface {
+	TxByHash(txHash *chainhash.Hash, pkScript []byte) (*TxInfo, error)
 	SendTx(tx *wire.MsgTx) (*chainhash.Hash, error)
 	CheckTxOutSpendable(txHash *chainhash.Hash, index uint32, mempool bool) (bool, error)
 }
@@ -63,7 +69,7 @@ type SystemParams struct {
 }
 
 type ParamsRetriever interface {
-	GetParams() (*SystemParams, error)
+	ParamsByHeight(ctx context.Context, height uint64) (*SystemParams, error)
 }
 
 type StakingInfo struct {

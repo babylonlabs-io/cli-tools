@@ -17,11 +17,8 @@ pass = "pass"
 # Btc network (testnet3|mainnet|regtest|simnet|signet)
 network = "regtest"
 
-# The unsafe params configuration only for poc/mvp purposes. Storing private keys
-# in the config file is not secure. After adding more secure options remove this.
-[unsafe-params-config]
-# The list of covenant private keys
-covenant_private_keys = ["b52947dbd8c4e6447a788b3620ec1f4d06339d05d90220878e168e036729c578", ]
-
-# The quorum of the covenants required to sign the transaction
-covenant_quorum = 1
+[remote-signer-config]
+# The list of signer urls in the format http://covenant_pk@signer_host:port
+urls = ["http://02f071ad9a03c3c13c0ce0107c89269edd9d3ed16c42aeaf72572e1135af34b81f@http://127.0.0.1:9791", ]
+# The timeout of each request to the remote signing server
+timeout_seconds = 2

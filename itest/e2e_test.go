@@ -131,12 +131,20 @@ func StartManager(
 	signerCfg, quorum, signingServer := startSigningServer(t, magicBytes)
 	parsedSignerCfg, err := signerCfg.Parse()
 	require.NoError(t, err)
-	covenantPublicKeysStr := pubKeysToString(parsedSignerCfg.PublicKeys)
 
 	appConfig.Signer = *signerCfg
-	appConfig.Params.CovenantPublicKeys = covenantPublicKeysStr
-	appConfig.Params.CovenantQuorum = quorum
 	appConfig.Db.Address = fmt.Sprintf("mongodb://%s", m.MongoHost())
+
+	var gp = services.ParsedGlobalParams{}
+
+	ver := services.ParsedVersionedGlobalParams{
+		Version:        0,
+		CovenantPks:    parsedSignerCfg.PublicKeys,
+		CovenantQuorum: quorum,
+		Tag:            magicBytes,
+	}
+
+	gp.Versions = append(gp.Versions, &ver)
 
 	// Client for testing purposes
 	client, err := btcclient.NewBtcClient(&appConfig.Btc)
@@ -168,10 +176,10 @@ func StartManager(
 	pipeLine, err := services.NewUnbondingPipelineFromConfig(
 		logger,
 		appConfig,
+		&gp,
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, err)
 	return &TestManager{
 		t:                   t,
 		bitcoindHandler:     h,
@@ -246,8 +254,8 @@ func startSigningServer(
 		fmt.Sprintf("http://%s@%s:%d", covenantPksStr[1], host, port),
 	}
 	signerCfg := &config.RemoteSignerConfig{
-		Urls:    urlsStr,
-		Timeout: 10 * time.Second,
+		Urls:           urlsStr,
+		TimeoutSeconds: 10,
 	}
 
 	appConfig.Server.Host = host

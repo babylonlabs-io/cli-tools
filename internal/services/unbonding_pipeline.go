@@ -71,6 +71,7 @@ type UnbondingPipeline struct {
 func NewUnbondingPipelineFromConfig(
 	logger *slog.Logger,
 	cfg *config.Config,
+	ret *ParsedGlobalParams,
 ) (*UnbondingPipeline, error) {
 
 	db, err := db.New(context.TODO(), cfg.Db.DbName, cfg.Db.Address)
@@ -87,6 +88,8 @@ func NewUnbondingPipelineFromConfig(
 		return nil, err
 	}
 
+	bs := NewBtcClientSender(client)
+
 	parsedRemoteSignerCfg, err := cfg.Signer.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse remote signer config: %w", err)
@@ -98,25 +101,12 @@ func NewUnbondingPipelineFromConfig(
 		return nil, err
 	}
 
-	// TODO: Add parse func to other configs, and do parsing in one place
-	parsedParams, err := cfg.Params.Parse()
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse params: %w", err)
-	}
-
-	paramsRetriever := NewSystemParamsRetriever(
-		parsedParams.CovenantQuorum,
-		parsedParams.CovenantPublicKeys,
-		parsedParams.MagicBytes,
-	)
-
 	return NewUnbondingPipeline(
 		logger,
 		store,
 		signer,
-		client,
-		paramsRetriever,
+		bs,
+		ret,
 		cfg.Btc.MustGetBtcNetworkParams(),
 	), nil
 }
@@ -230,12 +220,6 @@ func outputsAreEqual(a, b *wire.TxOut) bool {
 func (up *UnbondingPipeline) Run(ctx context.Context) error {
 	up.logger.Info("Running unbonding pipeline")
 
-	params, err := up.retriever.GetParams()
-
-	if err != nil {
-		return err
-	}
-
 	unbondingTransactions, err := up.store.GetNotProcessedUnbondingTransactions(ctx)
 
 	if err != nil {
@@ -244,6 +228,27 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 
 	for _, tx := range unbondingTransactions {
 		utx := tx
+
+		stakingOutputFromDb := utx.StakingOutput()
+		stakingTxHash := utx.UnbondingTransaction.TxIn[0].PreviousOutPoint.Hash
+
+		stakingTxInfo, err := up.sender.TxByHash(
+			&stakingTxHash,
+			stakingOutputFromDb.PkScript,
+		)
+
+		// if the staking transaction is not found in btc chain, it means something is wrong
+		// as staking service should not allow to create unbonding transaction without staking transaction
+		if err != nil {
+			return wrapCrititical(err)
+		}
+
+		params, err := up.retriever.ParamsByHeight(ctx, uint64(stakingTxInfo.TxInclusionHeight))
+
+		// we should always be able to retrieve params for the height of the staking transaction
+		if err != nil {
+			return wrapCrititical(err)
+		}
 
 		stakingOutputRecovered, unbondingPathSpendInfo, err := CreateUnbondingPathSpendInfo(
 			utx.StakingInfo,
@@ -254,8 +259,6 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 		if err != nil {
 			return wrapCrititical(err)
 		}
-
-		stakingOutputFromDb := utx.StakingOutput()
 
 		// This the last line check before sending unbonding transaction for signing. It checks
 		// whether staking output built from all the parameters: stakerPk, finalityProviderPk, stakingTimelock,
@@ -300,8 +303,6 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 		// We assume that this is valid unbodning transaction, with 1 input
 		utx.UnbondingTransaction.TxIn[0].Witness = witness
 
-		// Check whether the staking output has been spent, skip it and mark it in db if so
-		stakingTxHash := utx.StakingTransactionData.StakingTransaction.TxHash()
 		// TODO do we need to check the mempool?
 		spendable, err := up.sender.CheckTxOutSpendable(&stakingTxHash, uint32(utx.StakingTransactionData.StakingOutputIdx), true)
 		if err != nil {

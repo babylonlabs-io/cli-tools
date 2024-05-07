@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/babylonchain/babylon/testutil/datagen"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -28,7 +27,7 @@ func FuzzRemoteSignerConfig_Parse(f *testing.F) {
 		require.NoError(t, err)
 		validPublicKey := hex.EncodeToString(sk.PubKey().SerializeCompressed())
 		validPort := 9321
-		validTimeout := 1 * time.Second
+		validTimeout := 1
 
 		case1 := &testCase{
 			name: "valid url",
@@ -36,7 +35,7 @@ func FuzzRemoteSignerConfig_Parse(f *testing.F) {
 				Urls: []string{
 					fmt.Sprintf("http://%s@127.0.0.1:%d", validPublicKey, validPort),
 				},
-				Timeout: validTimeout,
+				TimeoutSeconds: validTimeout,
 			},
 			expectedErr: false,
 		}
@@ -49,7 +48,7 @@ func FuzzRemoteSignerConfig_Parse(f *testing.F) {
 					fmt.Sprintf("http://%s@127.0.0.1:%d",
 						datagen.GenRandomHexStr(r, datagen.RandomInt(r, 100)+1), validPort),
 				},
-				Timeout: validTimeout,
+				TimeoutSeconds: validTimeout,
 			},
 			expectedErr: true,
 		}
@@ -62,7 +61,7 @@ func FuzzRemoteSignerConfig_Parse(f *testing.F) {
 					fmt.Sprintf("http:%s@127.0.0.1.1:%d",
 						validPublicKey, validPort),
 				},
-				Timeout: validTimeout,
+				TimeoutSeconds: validTimeout,
 			},
 			expectedErr: true,
 		}
@@ -74,7 +73,7 @@ func FuzzRemoteSignerConfig_Parse(f *testing.F) {
 				Urls: []string{
 					fmt.Sprintf("http://%s@127.0.0.1:%d", validPublicKey, validPort),
 				},
-				Timeout: 0,
+				TimeoutSeconds: 0,
 			},
 			expectedErr: true,
 		}
