@@ -28,6 +28,7 @@ import (
 	"github.com/babylonchain/cli-tools/internal/btcclient"
 	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/babylonchain/cli-tools/internal/db"
+	"github.com/babylonchain/cli-tools/internal/db/model"
 	"github.com/babylonchain/cli-tools/internal/logger"
 	"github.com/babylonchain/cli-tools/internal/services"
 	"github.com/babylonchain/cli-tools/itest/containers"
@@ -57,6 +58,7 @@ type TestManager struct {
 	pipeLine            *services.UnbondingPipeline
 	testStoreController *services.PersistentUnbondingStorage
 	signingServer       *signerservice.SigningServer
+	parameters          *services.ParsedGlobalParams
 }
 
 type stakingData struct {
@@ -196,6 +198,7 @@ func StartManager(
 		pipeLine:            pipeLine,
 		testStoreController: storeController,
 		signingServer:       signingServer,
+		parameters:          &gp,
 	}
 }
 
@@ -432,7 +435,7 @@ func (tm *TestManager) createNUnbondingTransactions(n int, d *stakingData) ([]*u
 	return unbondingTxs, sendStakingTransactions
 }
 
-func TestRunningPipeline(t *testing.T) {
+func TestSendingFreshTransactions(t *testing.T) {
 	m := StartManager(t, 10)
 	d := defaultStakingData()
 	numUnbondingTxs := 10
@@ -467,7 +470,7 @@ func TestRunningPipeline(t *testing.T) {
 	require.Len(t, alreadySend, 0)
 
 	// 4. Run pipeline
-	err = m.pipeLine.Run(context.Background())
+	err = m.pipeLine.ProcessNewTransactions(context.Background())
 	require.NoError(t, err)
 
 	// 5. Generate few block to make sure transactions are included in btc
@@ -493,12 +496,73 @@ func TestRunningPipeline(t *testing.T) {
 	require.Len(t, sendTransactions, numUnbondingTxs)
 }
 
-func pubKeysToString(pubKeys []*btcec.PublicKey) []string {
-	pubKeysStr := make([]string, len(pubKeys))
-	for i, pk := range pubKeys {
-		pkStr := hex.EncodeToString(pk.SerializeCompressed())
-		pubKeysStr[i] = pkStr
-	}
+func (tm *TestManager) updateSchnorSigInDb(newSig *schnorr.Signature, txHash *chainhash.Hash) {
+	db, err := db.New(context.TODO(), tm.pipeLineConfig.Db.DbName, tm.pipeLineConfig.Db.Address)
+	require.NoError(tm.t, err)
+	txHashHex := txHash.String()
+	client := db.Client.Database(db.DbName).Collection(model.UnbondingCollection)
+	sigHex := hex.EncodeToString(newSig.Serialize())
+	filter := bson.M{"unbonding_tx_hash_hex": txHashHex}
+	update := bson.M{"$set": bson.M{"unbonding_tx_sig_hex": sigHex}}
+	_, err = client.UpdateOne(context.TODO(), filter, update)
+	require.NoError(tm.t, err)
+}
 
-	return pubKeysStr
+func TestReSendingFailedTransactions(t *testing.T) {
+	m := StartManager(t, 10)
+	d := defaultStakingData()
+
+	unb, stk := m.createNUnbondingTransactions(1, d)
+
+	unbondingTx := unb[0]
+	stakingTx := stk[0]
+
+	invalidSchnorrSigBytes := unbondingTx.signature.Serialize()
+	// change one byte in signature to make it invalid
+	invalidSchnorrSigBytes[63] = invalidSchnorrSigBytes[63] + 1
+	invalidSchnorrSig, err := schnorr.ParseSignature(invalidSchnorrSigBytes)
+	require.NoError(t, err)
+
+	// 1. Add unbonding transaction with invalid signature, so it will fail when sending
+	err = m.testStoreController.AddTxWithSignature(
+		context.Background(),
+		unbondingTx.unbondingTx,
+		invalidSchnorrSig,
+		m.createStakingInfo(d),
+		&services.StakingTransactionData{
+			StakingTransaction: stakingTx,
+			// we always use 0 index for staking output in e2e tests
+			StakingOutputIdx: 0,
+		},
+	)
+	require.NoError(t, err)
+
+	alreadySend, err := m.testStoreController.GetSendUnbondingTransactions(context.TODO())
+	require.NoError(t, err)
+	require.Len(t, alreadySend, 0)
+
+	// 2. Run pipeline
+	err = m.pipeLine.ProcessNewTransactions(context.Background())
+	require.NoError(t, err)
+
+	// 3. There should be one failed transaction
+	failedTx, err := m.testStoreController.GetFailedUnbondingTransactions(context.TODO())
+	require.NoError(t, err)
+	require.Len(t, failedTx, 1)
+
+	// 4. Fix sig in db
+	unbondingTxHash := unbondingTx.unbondingTx.TxHash()
+	m.updateSchnorSigInDb(unbondingTx.signature, &unbondingTxHash)
+
+	// 5. Run pipeline for failed tx
+	err = m.pipeLine.ProcessFailedTransactions(context.Background())
+	require.NoError(t, err)
+
+	failedTxNew, err := m.testStoreController.GetFailedUnbondingTransactions(context.TODO())
+	require.NoError(t, err)
+	require.Len(t, failedTxNew, 0)
+
+	sendUnbondingTx, err := m.testStoreController.GetSendUnbondingTransactions(context.TODO())
+	require.NoError(t, err)
+	require.Len(t, sendUnbondingTx, 1)
 }

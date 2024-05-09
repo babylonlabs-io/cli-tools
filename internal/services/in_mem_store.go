@@ -41,6 +41,8 @@ func newUnbondingTxDataWithCounter(
 	}
 }
 
+var _ UnbondingStore = (*InMemoryUnbondingStore)(nil)
+
 type InMemoryUnbondingStore struct {
 	mu      sync.Mutex
 	mapping map[chainhash.Hash]*unbondingTxDataWithCounter
@@ -86,6 +88,35 @@ func (s *InMemoryUnbondingStore) GetNotProcessedUnbondingTransactions(_ context.
 		txCopy := tx
 		// get only not processed transactions
 		if tx.state == inserted {
+			res = append(res, txCopy)
+		}
+	}
+
+	// sort by counter
+	sort.SliceStable(res, func(i, j int) bool {
+		return res[i].Counter < res[j].Counter
+	})
+
+	// convert to UnbondingTxData
+	var resUnbondingTxData []*UnbondingTxData
+	for _, tx := range res {
+		txCopy := tx
+		resUnbondingTxData = append(resUnbondingTxData, &txCopy.UnbondingTxData)
+	}
+
+	return resUnbondingTxData, nil
+}
+
+func (s *InMemoryUnbondingStore) GetFailedUnbondingTransactions(ctx context.Context) ([]*UnbondingTxData, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var res []*unbondingTxDataWithCounter
+
+	for _, tx := range s.mapping {
+		txCopy := tx
+		// get only failed transactions
+		if tx.state == failed {
 			res = append(res, txCopy)
 		}
 	}

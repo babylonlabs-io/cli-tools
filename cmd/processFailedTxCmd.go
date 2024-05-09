@@ -11,12 +11,12 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(runUnbondingPipelineCmd)
+	rootCmd.AddCommand(processFailedTxCmd)
 }
 
-var runUnbondingPipelineCmd = &cobra.Command{
-	Use:   "run-unbonding-pipeline",
-	Short: "runs unbonding pipeline",
+var processFailedTxCmd = &cobra.Command{
+	Use:   "process-failed-transactions",
+	Short: "tries to re-send unbonding transactions that failed to be sent to the network",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := cmd.Flags().GetString(configPathKey)
 		if err != nil {
@@ -49,6 +49,6 @@ var runUnbondingPipelineCmd = &cobra.Command{
 			return err
 		}
 
-		return pipeLine.ProcessNewTransactions(context.Background())
+		return pipeLine.ProcessFailedTransactions(context.Background())
 	},
 }

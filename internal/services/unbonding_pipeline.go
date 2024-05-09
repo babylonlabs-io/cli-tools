@@ -211,22 +211,11 @@ func outputsAreEqual(a, b *wire.TxOut) bool {
 	return true
 }
 
-// Main Pipeline function which:
-// 1. Retrieves unbonding transactions from store in order they were added
-// 2. Sends them to covenant member for signing
-// 3. Creates witness for unbonding transaction
-// 4. Sends transaction to bitcoin network
-// 5. Marks transaction as processed sending succeded or failed if sending failed
-func (up *UnbondingPipeline) Run(ctx context.Context) error {
-	up.logger.Info("Running unbonding pipeline")
-
-	unbondingTransactions, err := up.store.GetNotProcessedUnbondingTransactions(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	for _, tx := range unbondingTransactions {
+func (up *UnbondingPipeline) processUnbondingTransactions(
+	ctx context.Context,
+	transactions []*UnbondingTxData,
+) error {
+	for _, tx := range transactions {
 		utx := tx
 
 		stakingOutputFromDb := utx.StakingOutput()
@@ -335,7 +324,55 @@ func (up *UnbondingPipeline) Run(ctx context.Context) error {
 			}
 		}
 	}
+	return nil
+}
 
-	up.logger.Info("Unbonding pipeline run finished.", "num_tx_processed", len(unbondingTransactions))
+// Main Pipeline function which:
+// 1. Retrieves unbonding transactions from store in order they were added
+// 2. Sends them to covenant member for signing
+// 3. Creates witness for unbonding transaction
+// 4. Sends transaction to bitcoin network
+// 5. Marks transaction as processed sending succeded or failed if sending failed
+func (up *UnbondingPipeline) ProcessNewTransactions(ctx context.Context) error {
+	up.logger.Info("Running unbonding pipeline with new transactions")
+
+	unbondingTransactions, err := up.store.GetNotProcessedUnbondingTransactions(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if len(unbondingTransactions) == 0 {
+		up.logger.Info("No unbonding new transactions to process")
+		return nil
+	}
+
+	if err := up.processUnbondingTransactions(ctx, unbondingTransactions); err != nil {
+		return err
+	}
+
+	up.logger.Info("Unbonding pipeline run for new transactions finished.", "num_tx_processed", len(unbondingTransactions))
+	return nil
+}
+
+func (up *UnbondingPipeline) ProcessFailedTransactions(ctx context.Context) error {
+	up.logger.Info("Running unbonding pipeline for failed transactions")
+
+	unbondingTransactions, err := up.store.GetFailedUnbondingTransactions(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if len(unbondingTransactions) == 0 {
+		up.logger.Info("No failed unbonding transactions to process")
+		return nil
+	}
+
+	if err := up.processUnbondingTransactions(ctx, unbondingTransactions); err != nil {
+		return err
+	}
+
+	up.logger.Info("Unbonding pipeline for failed transactions finished.", "num_tx_processed", len(unbondingTransactions))
 	return nil
 }

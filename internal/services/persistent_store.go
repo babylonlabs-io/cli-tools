@@ -74,6 +74,8 @@ func pubKeyFromHex(hexString string) (*btcec.PublicKey, error) {
 	return key, nil
 }
 
+var _ UnbondingStore = (*PersistentUnbondingStorage)(nil)
+
 type PersistentUnbondingStorage struct {
 	client *db.Database
 }

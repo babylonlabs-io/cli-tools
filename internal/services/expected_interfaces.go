@@ -119,6 +119,8 @@ type UnbondingStore interface {
 	// Interface Contract: results should be returned in the order they were added to the store
 	GetNotProcessedUnbondingTransactions(ctx context.Context) ([]*UnbondingTxData, error)
 
+	GetFailedUnbondingTransactions(ctx context.Context) ([]*UnbondingTxData, error)
+
 	SetUnbondingTransactionProcessed(ctx context.Context, utx *UnbondingTxData) error
 
 	SetUnbondingTransactionProcessingFailed(ctx context.Context, utx *UnbondingTxData) error
