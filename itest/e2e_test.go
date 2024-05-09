@@ -6,6 +6,7 @@ package e2etest
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -518,7 +519,7 @@ func (tm *TestManager) updateSchnorSigInDb(newSig *schnorr.Signature, txHash *ch
 	require.NoError(tm.t, err)
 }
 
-func TestReSendingFailedTransactions(t *testing.T) {
+func TestHandlingCriticalError(t *testing.T) {
 	m := StartManager(t, 10)
 	d := defaultStakingData()
 
@@ -553,26 +554,10 @@ func TestReSendingFailedTransactions(t *testing.T) {
 
 	// 2. Run pipeline
 	err = m.pipeLine.ProcessNewTransactions(context.Background())
-	require.NoError(t, err)
+	require.Error(t, err)
+	// With invalid signature in db, signers will refuse to sign it, which should end
+	// with critical error
+	require.True(t, errors.Is(err, services.ErrCriticalError))
 
-	// 3. There should be one failed transaction
-	failedTx, err := m.testStoreController.GetFailedUnbondingTransactions(context.TODO())
-	require.NoError(t, err)
-	require.Len(t, failedTx, 1)
-
-	// 4. Fix sig in db
-	unbondingTxHash := unbondingTx.unbondingTx.TxHash()
-	m.updateSchnorSigInDb(unbondingTx.signature, &unbondingTxHash)
-
-	// 5. Run pipeline for failed tx
-	err = m.pipeLine.ProcessFailedTransactions(context.Background())
-	require.NoError(t, err)
-
-	failedTxNew, err := m.testStoreController.GetFailedUnbondingTransactions(context.TODO())
-	require.NoError(t, err)
-	require.Len(t, failedTxNew, 0)
-
-	sendUnbondingTx, err := m.testStoreController.GetSendUnbondingTransactions(context.TODO())
-	require.NoError(t, err)
-	require.Len(t, sendUnbondingTx, 1)
+	// TODO:Find a way to simulate bitcoind not accepting transaction
 }

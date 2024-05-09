@@ -14,6 +14,8 @@ import (
 type SignRequest struct {
 	// Unbonding transaction which should be signed
 	UnbondingTransaction *wire.MsgTx
+	// Staker signature of the unbonding transaction
+	StakerUnbondingSig *schnorr.Signature
 	// Staking output which was used to fund unbonding transaction
 	FundingOutput *wire.TxOut
 	// Script of the path which should be execute - unbonding path
@@ -29,12 +31,14 @@ type SignResult struct {
 
 func NewSignRequest(
 	tx *wire.MsgTx,
+	stakerSig *schnorr.Signature,
 	fundingOutput *wire.TxOut,
 	script []byte,
 	pubKey *btcec.PublicKey,
 ) *SignRequest {
 	return &SignRequest{
 		UnbondingTransaction: tx,
+		StakerUnbondingSig:   stakerSig,
 		FundingOutput:        fundingOutput,
 		UnbondingScript:      script,
 		SignerPubKey:         pubKey,

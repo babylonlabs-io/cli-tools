@@ -133,6 +133,7 @@ func NewUnbondingPipeline(
 // covenant signers in a concurrent manner
 func (up *UnbondingPipeline) signUnbondingTransaction(
 	unbondingTransaction *wire.MsgTx,
+	stakerSig *schnorr.Signature,
 	fundingOutput *wire.TxOut,
 	unbondingScript []byte,
 	params *SystemParams,
@@ -142,6 +143,7 @@ func (up *UnbondingPipeline) signUnbondingTransaction(
 	for _, pk := range params.CovenantPublicKeys {
 		req := NewSignRequest(
 			unbondingTransaction,
+			stakerSig,
 			fundingOutput,
 			unbondingScript,
 			pk,
@@ -262,6 +264,7 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 
 		sigs, err := up.signUnbondingTransaction(
 			utx.UnbondingTransaction,
+			utx.UnbondingTransactionSig,
 			stakingOutputRecovered,
 			stakingOutputRecovered.PkScript,
 			params,

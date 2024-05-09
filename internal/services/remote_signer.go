@@ -39,6 +39,7 @@ func (rs *RemoteSigner) SignUnbondingTransaction(req *SignRequest) (*PubKeySigPa
 		url,
 		rs.timeout,
 		req.UnbondingTransaction,
+		req.StakerUnbondingSig,
 		req.SignerPubKey,
 		req.UnbondingScript,
 	)
