@@ -47,9 +47,10 @@ require (
 )
 
 require (
-	github.com/babylonchain/covenant-signer v0.0.0-20240426115954-38daee94636c
+	github.com/babylonchain/covenant-signer v0.0.0-20240507155851-64756e393be2
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.4
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 )
 
 require (
@@ -131,7 +132,6 @@ require (
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.0.1 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/decred/dcrd/lru v1.0.0 // indirect
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.4 // indirect

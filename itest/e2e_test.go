@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -74,8 +75,9 @@ func defaultStakingData() *stakingData {
 		stakingAmount:  btcutil.Amount(100000),
 		stakingTime:    10000,
 		stakingFeeRate: btcutil.Amount(5000), // feeRatePerKb
-		unbondingTime:  100,
-		unbondingFee:   btcutil.Amount(10000),
+		// TODO: Move those to global params
+		unbondingTime: 100,
+		unbondingFee:  btcutil.Amount(10000),
 	}
 }
 
@@ -130,9 +132,7 @@ func StartManager(
 	appConfig.Btc.Network = netParams.Name
 
 	magicBytes := []byte{0x0, 0x1, 0x2, 0x3}
-	signerCfg, quorum, signingServer := startSigningServer(t, magicBytes)
-	parsedSignerCfg, err := signerCfg.Parse()
-	require.NoError(t, err)
+	signerCfg, signerGlobalParams, signingServer := startSigningServer(t, magicBytes)
 
 	appConfig.Signer = *signerCfg
 	appConfig.Db.Address = fmt.Sprintf("mongodb://%s", m.MongoHost())
@@ -141,8 +141,8 @@ func StartManager(
 
 	ver := services.ParsedVersionedGlobalParams{
 		Version:        0,
-		CovenantPks:    parsedSignerCfg.PublicKeys,
-		CovenantQuorum: quorum,
+		CovenantPks:    signerGlobalParams.Versions[0].CovenantPks,
+		CovenantQuorum: signerGlobalParams.Versions[0].CovenantQuorum,
 		Tag:            magicBytes,
 	}
 
@@ -164,7 +164,7 @@ func StartManager(
 
 	err = client.UnlockWallet(60*60*60, passphrase)
 	require.NoError(t, err)
-	stakerPrivKey, err := client.DumpPrivateKey(walletAddress)
+	stakerPrivKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
 	fpKey, err := btcec.NewPrivateKey()
@@ -187,8 +187,8 @@ func StartManager(
 		bitcoindHandler:     h,
 		walletPass:          passphrase,
 		btcClient:           client,
-		covenantPublicKeys:  parsedSignerCfg.PublicKeys,
-		covenantQuorum:      quorum,
+		covenantPublicKeys:  signerGlobalParams.Versions[0].CovenantPks,
+		covenantQuorum:      signerGlobalParams.Versions[0].CovenantQuorum,
 		finalityProviderKey: fpKey,
 		stakerAddress:       walletAddress,
 		stakerPrivKey:       stakerPrivKey,
@@ -205,9 +205,8 @@ func StartManager(
 func startSigningServer(
 	t *testing.T,
 	magicBytes []byte,
-) (*config.RemoteSignerConfig, uint32, *signerservice.SigningServer) {
+) (*config.RemoteSignerConfig, *signerapp.ParsedGlobalParams, *signerservice.SigningServer) {
 	appConfig := signercfg.DefaultConfig()
-	logger := logger.DefaultLogger()
 	appConfig.BtcNodeConfig.Host = "127.0.0.1:18443"
 	appConfig.BtcNodeConfig.User = "user"
 	appConfig.BtcNodeConfig.Pass = "pass"
@@ -263,31 +262,42 @@ func startSigningServer(
 
 	appConfig.Server.Host = host
 	appConfig.Server.Port = port
-	appConfig.Params.CovenantQuorum = quorum
-	appConfig.Params.MagicBytes = hex.EncodeToString(magicBytes)
-	appConfig.Params.W = 1
-	appConfig.Params.CovenantPublicKeys = covenantPksStr
-
 	parsedconfig, err := appConfig.Parse()
 	require.NoError(t, err)
 
 	// In e2e test we are using the same node for signing as for indexing functionalities
 	chainInfo := signerapp.NewBitcoindChainInfo(client)
-	// TODO: Use signer with psbt, this require some changes in tests
-	signer := signerapp.NewPrivKeySigner(client)
-	paramsGetter := signerapp.NewConfigParamsRetriever(parsedconfig.ParamsConfig)
+	signer := signerapp.NewPsbtSigner(client)
+
+	signerGlobalParams := signerapp.ParsedGlobalParams{
+		Versions: []*signerapp.ParsedVersionedGlobalParams{
+			{
+				Version:           0,
+				ActivationHeight:  0,
+				StakingCap:        btcutil.Amount(100000000000),
+				Tag:               magicBytes,
+				CovenantQuorum:    quorum,
+				CovenantPks:       []*btcec.PublicKey{localCovenantKey1, localCovenantKey2},
+				ConfirmationDepth: 1,
+				UnbondingTime:     100,
+				UnbondingFee:      btcutil.Amount(10000),
+				MinStakingTime:    1,
+				MaxStakingTime:    math.MaxUint16,
+				MinStakingAmount:  btcutil.Amount(1),
+				MaxStakingAmount:  btcutil.Amount(100000000000),
+			},
+		},
+	}
 
 	app := signerapp.NewSignerApp(
-		logger,
 		signer,
 		chainInfo,
-		paramsGetter,
+		&signerGlobalParams,
 		netParams,
 	)
 
 	server, err := signerservice.New(
 		context.Background(),
-		logger,
 		parsedconfig,
 		app,
 	)
@@ -305,7 +315,7 @@ func startSigningServer(
 		_ = server.Stop(context.TODO())
 	})
 
-	return signerCfg, quorum, server
+	return signerCfg, &signerGlobalParams, server
 }
 
 type stakingTxSigInfo struct {
