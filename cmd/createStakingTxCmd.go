@@ -10,6 +10,7 @@ import (
 	"github.com/babylonchain/babylon/btcstaking"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
@@ -122,7 +123,7 @@ func getBtcNetworkParams(network string) (*chaincfg.Params, error) {
 	}
 }
 
-func parsePubKeyFromHex(pkHex string) (*btcec.PublicKey, error) {
+func parse33PubKeyFromHex(pkHex string) (*btcec.PublicKey, error) {
 	pkBytes, err := hex.DecodeString(pkHex)
 	if err != nil {
 		return nil, err
@@ -136,11 +137,25 @@ func parsePubKeyFromHex(pkHex string) (*btcec.PublicKey, error) {
 	return pk, nil
 }
 
+func parse32PubKeyFromHex(pkHex string) (*btcec.PublicKey, error) {
+	pkBytes, err := hex.DecodeString(pkHex)
+	if err != nil {
+		return nil, err
+	}
+
+	pk, err := schnorr.ParsePubKey(pkBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return pk, nil
+}
+
 func parseCovenantKeysFromSlice(covenantMembersPks []string) ([]*btcec.PublicKey, error) {
 	covenantPubKeys := make([]*btcec.PublicKey, len(covenantMembersPks))
 
 	for i, fpPk := range covenantMembersPks {
-		covPk, err := parsePubKeyFromHex(fpPk)
+		covPk, err := parse33PubKeyFromHex(fpPk)
 
 		if err != nil {
 			return nil, err
@@ -237,13 +252,13 @@ var createStakingTxCmd = &cobra.Command{
 			return err
 		}
 
-		stakerPk, err := parsePubKeyFromHex(mustGetStringFlag(cmd, FlagStakerPk))
+		stakerPk, err := parse32PubKeyFromHex(mustGetStringFlag(cmd, FlagStakerPk))
 
 		if err != nil {
 			return err
 		}
 
-		finalityProviderPk, err := parsePubKeyFromHex(mustGetStringFlag(cmd, FlagFinalityProviderPk))
+		finalityProviderPk, err := parse32PubKeyFromHex(mustGetStringFlag(cmd, FlagFinalityProviderPk))
 
 		if err != nil {
 			return err
