@@ -47,7 +47,7 @@ require (
 )
 
 require (
-	github.com/babylonchain/covenant-signer v0.0.0-20240509110821-b6017a54332f
+	github.com/babylonchain/covenant-signer v0.1.0
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.4
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
