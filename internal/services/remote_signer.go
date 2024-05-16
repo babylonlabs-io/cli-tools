@@ -45,7 +45,7 @@ func (rs *RemoteSigner) SignUnbondingTransaction(req *SignRequest) (*PubKeySigPa
 	)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("request to coventant %s, with url:%s, failed: %w", pkStr, url, err)
 	}
 
 	return &PubKeySigPair{

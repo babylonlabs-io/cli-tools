@@ -184,7 +184,7 @@ func (up *UnbondingPipeline) requestSigFromCovenant(req *SignRequest, resultChan
 		// TODO record metrics
 		up.logger.Error("failed to get signatures from covenant",
 			"signer_pk", pkStr,
-			"error", res.Err)
+			"error", err)
 
 		res.Err = err
 	} else {
