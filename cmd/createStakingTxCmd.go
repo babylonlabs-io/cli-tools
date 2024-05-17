@@ -72,7 +72,7 @@ func serializeBTCTx(tx *wire.MsgTx) ([]byte, error) {
 	return txBuf.Bytes(), nil
 }
 
-func serializeBTCTxToHex(tx *wire.MsgTx) (string, error) {
+func SerializeBTCTxToHex(tx *wire.MsgTx) (string, error) {
 	bytes, err := serializeBTCTx(tx)
 
 	if err != nil {
@@ -302,7 +302,7 @@ var createStakingTxCmd = &cobra.Command{
 			return err
 		}
 
-		serializedTx, err := serializeBTCTxToHex(tx)
+		serializedTx, err := SerializeBTCTxToHex(tx)
 		if err != nil {
 			return err
 		}

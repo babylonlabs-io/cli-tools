@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,16 +19,19 @@ import (
 	signercfg "github.com/babylonchain/covenant-signer/config"
 	"github.com/babylonchain/covenant-signer/signerapp"
 	"github.com/babylonchain/covenant-signer/signerservice"
+	"github.com/babylonchain/covenant-signer/utils"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
+	"github.com/babylonchain/cli-tools/cmd"
 	"github.com/babylonchain/cli-tools/internal/btcclient"
 	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/babylonchain/cli-tools/internal/db"
@@ -37,7 +42,8 @@ import (
 )
 
 const (
-	passphrase = "pass"
+	passphrase     = "pass"
+	FundWalletName = "test-wallet"
 )
 
 var (
@@ -104,7 +110,9 @@ func PurgeAllCollections(ctx context.Context, client *mongo.Client, databaseName
 
 func StartManager(
 	t *testing.T,
-	numMatureOutputsInWallet uint32) *TestManager {
+	numMatureOutputsInWallet uint32,
+	runMongodb bool,
+) *TestManager {
 	logger := logger.DefaultLogger()
 	m, err := containers.NewManager()
 	require.NoError(t, err)
@@ -115,17 +123,21 @@ func StartManager(
 	h := NewBitcoindHandler(t, m)
 	h.Start()
 
-	_, err = m.RunMongoDbResource()
-	require.NoError(t, err)
+	appConfig := config.DefaultConfig()
+
+	if runMongodb {
+		_, err = m.RunMongoDbResource()
+		require.NoError(t, err)
+
+		appConfig.Db.Address = fmt.Sprintf("mongodb://%s", m.MongoHost())
+	}
 
 	// Give some time to launch mongo and bitcoind
 	time.Sleep(2 * time.Second)
 
-	_ = h.CreateWallet("test-wallet", passphrase)
+	_ = h.CreateWallet(FundWalletName, passphrase)
 	// only outputs which are 100 deep are mature
 	_ = h.GenerateBlocks(int(numMatureOutputsInWallet) + 100)
-
-	appConfig := config.DefaultConfig()
 
 	appConfig.Btc.Host = "127.0.0.1:18443"
 	appConfig.Btc.User = "user"
@@ -136,7 +148,6 @@ func StartManager(
 	signerCfg, signerGlobalParams, signingServer := startSigningServer(t, magicBytes)
 
 	appConfig.Signer = *signerCfg
-	appConfig.Db.Address = fmt.Sprintf("mongodb://%s", m.MongoHost())
 
 	var gp = services.ParsedGlobalParams{}
 
@@ -171,11 +182,6 @@ func StartManager(
 	fpKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 
-	testDbConnection, err := db.New(context.TODO(), appConfig.Db.DbName, appConfig.Db.Address)
-	require.NoError(t, err)
-
-	storeController := services.NewPersistentUnbondingStorage(testDbConnection)
-
 	pipeLine, err := services.NewUnbondingPipelineFromConfig(
 		logger,
 		appConfig,
@@ -183,7 +189,7 @@ func StartManager(
 	)
 	require.NoError(t, err)
 
-	return &TestManager{
+	tm := &TestManager{
 		t:                   t,
 		bitcoindHandler:     h,
 		walletPass:          passphrase,
@@ -197,10 +203,20 @@ func StartManager(
 		magicBytes:          []byte{0x0, 0x1, 0x2, 0x3},
 		pipeLineConfig:      appConfig,
 		pipeLine:            pipeLine,
-		testStoreController: storeController,
+		testStoreController: nil,
 		signingServer:       signingServer,
 		parameters:          &gp,
 	}
+
+	if runMongodb {
+		testDbConnection, err := db.New(context.TODO(), appConfig.Db.DbName, appConfig.Db.Address)
+		require.NoError(t, err)
+
+		storeController := services.NewPersistentUnbondingStorage(testDbConnection)
+		tm.testStoreController = storeController
+	}
+
+	return tm
 }
 
 func startSigningServer(
@@ -446,8 +462,98 @@ func (tm *TestManager) createNUnbondingTransactions(n int, d *stakingData) ([]*u
 	return unbondingTxs, sendStakingTransactions
 }
 
+func TestBtcTimestamp(t *testing.T) {
+	tm := StartManager(t, 10, false)
+	btcd := tm.bitcoindHandler
+
+	wName := "btc-file-timestamping"
+	resp := btcd.CreateWallet(wName, passphrase)
+	require.Equal(t, wName, resp.Name)
+
+	// generate new address
+	newAddr := btcd.GetNewAddress(wName)
+	require.NotEmpty(t, newAddr)
+
+	// fund the new addr
+	fundingTxHash := btcd.SendToAddress(FundWalletName, newAddr.String(), "25")
+	btcd.GenerateBlocks(5)
+
+	newAddrPkScript, err := txscript.PayToAddrScript(newAddr)
+	require.NoError(t, err)
+
+	tx, conf, err := tm.btcClient.TxDetails(fundingTxHash, newAddrPkScript)
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+	require.Equal(t, btcclient.TxInChain, conf)
+
+	fundinTxSerialized, err := cmd.SerializeBTCTxToHex(tx.Tx)
+	require.NoError(t, err)
+
+	btcd.WalletPassphrase(wName, passphrase, "70")
+
+	// timestamp the go.mod
+	currentPath, err := os.Getwd()
+	require.NoError(t, err)
+	modFilePath := filepath.Join(currentPath, "../go.mod")
+
+	timestampFileOutput, err := cmd.CreateTimestampTx(
+		fundinTxSerialized,
+		modFilePath,
+		newAddr.EncodeAddress(),
+		3000,
+		netParams,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, timestampFileOutput)
+
+	signedTimestampTx := btcd.SignRawTxWithWallet(wName, timestampFileOutput.TimestampTx)
+
+	stx, _, err := utils.NewBTCTxFromHex(signedTimestampTx.Hex)
+	require.NoError(t, err)
+	require.NotNil(t, signedTimestampTx)
+
+	stxHash := stx.TxHash()
+
+	btcd.SendRawTx(wName, signedTimestampTx.Hex)
+	btcd.GenerateBlocks(5)
+
+	stxConfirmation, stxState, err := tm.btcClient.TxDetails(&stxHash, newAddrPkScript)
+	require.NoError(t, err)
+	require.Equal(t, btcclient.TxInChain, stxState)
+	require.NotNil(t, stxConfirmation)
+
+	// check timestamp from funded timestamp tx
+	fundedFromTxTimestamp, err := cmd.SerializeBTCTxToHex(stx)
+	require.NoError(t, err)
+
+	timestampOutputFromFundedTimestamp, err := cmd.CreateTimestampTx(
+		fundedFromTxTimestamp,
+		modFilePath,
+		newAddr.EncodeAddress(),
+		3000,
+		netParams,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, timestampOutputFromFundedTimestamp)
+
+	signTxFromTimest := btcd.SignRawTxWithWallet(wName, timestampOutputFromFundedTimestamp.TimestampTx)
+
+	btcd.SendRawTx(wName, signTxFromTimest.Hex)
+	btcd.GenerateBlocks(5)
+
+	timestampTxFromTimestampTx, _, err := utils.NewBTCTxFromHex(timestampOutputFromFundedTimestamp.TimestampTx)
+	require.NoError(t, err)
+
+	timestampTxHash := timestampTxFromTimestampTx.TxHash()
+
+	stxConfirmation, stxState, err = tm.btcClient.TxDetails(&timestampTxHash, newAddrPkScript)
+	require.NoError(t, err)
+	require.Equal(t, btcclient.TxInChain, stxState)
+	require.NotNil(t, stxConfirmation)
+}
+
 func TestSendingFreshTransactions(t *testing.T) {
-	m := StartManager(t, 10)
+	m := StartManager(t, 10, true)
 	d := defaultStakingData()
 	numUnbondingTxs := 10
 
@@ -520,7 +626,7 @@ func (tm *TestManager) updateSchnorSigInDb(newSig *schnorr.Signature, txHash *ch
 }
 
 func TestHandlingCriticalError(t *testing.T) {
-	m := StartManager(t, 10)
+	m := StartManager(t, 10, true)
 	d := defaultStakingData()
 
 	unb, stk := m.createNUnbondingTransactions(1, d)

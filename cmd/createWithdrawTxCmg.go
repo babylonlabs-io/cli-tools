@@ -254,7 +254,7 @@ var createWithdrawCmd = &cobra.Command{
 		}
 
 		// at this point we created unsigned withdraw tx lets create response
-		serializedWithdrawTx, err := serializeBTCTxToHex(info.spendStakeTx)
+		serializedWithdrawTx, err := SerializeBTCTxToHex(info.spendStakeTx)
 
 		if err != nil {
 			return err
@@ -348,7 +348,7 @@ var createWithdrawCmd = &cobra.Command{
 
 		// serialize tx with witness
 
-		serializedWithdrawTx, err = serializeBTCTxToHex(info.spendStakeTx)
+		serializedWithdrawTx, err = SerializeBTCTxToHex(info.spendStakeTx)
 
 		if err != nil {
 			return err

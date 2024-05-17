@@ -63,7 +63,7 @@ func (m *Manager) ExecCmd(t *testing.T, containerName string, command []string) 
 		errBuf bytes.Buffer
 	)
 
-	timeout := 20 * time.Second
+	timeout := 5 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
