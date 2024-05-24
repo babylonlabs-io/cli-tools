@@ -225,7 +225,7 @@ var createUnbondingTxCmd = &cobra.Command{
 
 		unbondingTxHash := unbondingTx.TxHash()
 
-		unbondingTxHex, err := serializeBTCTxToHex(unbondingTx)
+		unbondingTxHex, err := SerializeBTCTxToHex(unbondingTx)
 
 		if err != nil {
 			return err
