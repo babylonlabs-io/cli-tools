@@ -46,7 +46,7 @@ func (c *RemoteSignerConfig) Parse() (*ParsedRemoteSignerConfig, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid url %s: %w", urlStr, err)
 		}
-		urls[i] = fmt.Sprintf("http://%s", parsedUrl.Host)
+		urls[i] = fmt.Sprintf("%s://%s", parsedUrl.Scheme, parsedUrl.Host)
 
 		publicKeyStr := parsedUrl.User.String()
 		pkBytes, err := hex.DecodeString(publicKeyStr)

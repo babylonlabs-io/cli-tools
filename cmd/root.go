@@ -17,7 +17,7 @@ var (
 
 	rootCmd = &cobra.Command{
 		Use:   "cli-tools",
-		Short: "Set of cli tools to run batch jobs on phase-1 mainnet",
+		Short: "Set of cli tools used in phase-1",
 	}
 
 	//   C:\Users\<username>\AppData\Local\tools on Windows
