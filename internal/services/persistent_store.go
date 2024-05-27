@@ -162,8 +162,8 @@ func (s *PersistentUnbondingStorage) AddTxWithSignature(
 	sigBytes := sig.Serialize()
 	sigHex := hex.EncodeToString(sigBytes)
 
-	stakerPkHex := pubKeyToString(info.StakerPk)
-	fpPkHex := pubKeyToString(info.FinalityProviderPk)
+	stakerPkHex := pubKeyToStringSchnorr(info.StakerPk)
+	fpPkHex := pubKeyToStringSchnorr(info.FinalityProviderPk)
 
 	stakingTxHex, err := serializeBTCTxToHex(stakingtTxData.StakingTransaction)
 	if err != nil {

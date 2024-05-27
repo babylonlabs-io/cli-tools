@@ -12,16 +12,18 @@ import (
 )
 
 type Config struct {
-	Db     DbConfig           `mapstructure:"db-config"`
-	Btc    BtcConfig          `mapstructure:"btc-config"`
-	Signer RemoteSignerConfig `mapstructure:"remote-signer-config"`
+	Db      DbConfig           `mapstructure:"db-config"`
+	Btc     BtcConfig          `mapstructure:"btc-config"`
+	Signer  RemoteSignerConfig `mapstructure:"remote-signer-config"`
+	Metrics MetricsConfig      `mapstructure:"metrics-config"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Db:     *DefaultDBConfig(),
-		Btc:    *DefaultBtcConfig(),
-		Signer: *DefaultRemoteSignerConfig(),
+		Db:      *DefaultDBConfig(),
+		Btc:     *DefaultBtcConfig(),
+		Signer:  *DefaultRemoteSignerConfig(),
+		Metrics: *DefaultMetricsConfig(),
 	}
 }
 
@@ -32,6 +34,10 @@ func (cfg *Config) Validate() error {
 
 	if _, err := cfg.Signer.Parse(); err != nil {
 		return fmt.Errorf("invalid remote signer config: %w", err)
+	}
+
+	if err := cfg.Metrics.Validate(); err != nil {
+		return fmt.Errorf("invalid metrics config: %w", err)
 	}
 
 	return nil
@@ -61,6 +67,15 @@ network = "{{ .Btc.Network }}"
 urls = [{{ range .Signer.Urls }}{{ printf "%q, " . }}{{end}}]
 # The timeout of each request to the remote signing server
 timeout_seconds = {{ .Signer.TimeoutSeconds }}
+
+[metrics-config]
+# Enable reporting metrics
+enabled = {{ .Metrics.Enabled }}
+# IP of the Prometheus server
+host = "{{ .Metrics.Host }}"
+# Port of the Prometheus server
+port = {{ .Metrics.Port }}
+
 `
 
 var configTemplate *template.Template
