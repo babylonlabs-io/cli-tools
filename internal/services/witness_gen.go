@@ -34,7 +34,7 @@ func createWitnessSignaturesForPubKeys(
 	receivedSignatures := make(map[string]*schnorr.Signature)
 
 	for _, pair := range receivedSignaturePairs {
-		receivedSignatures[pubKeyToString(pair.PubKey)] = pair.Signature
+		receivedSignatures[pubKeyToStringSchnorr(pair.PubKey)] = pair.Signature
 	}
 
 	sortedPubKeys := sortPubKeysForWitness(covenantPubKeys)
@@ -44,7 +44,7 @@ func createWitnessSignaturesForPubKeys(
 
 	for i, key := range sortedPubKeys {
 		k := key
-		if signature, found := receivedSignatures[pubKeyToString(k)]; found {
+		if signature, found := receivedSignatures[pubKeyToStringSchnorr(k)]; found {
 			signatures[i] = signature
 		}
 	}

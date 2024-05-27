@@ -19,6 +19,14 @@ network = "regtest"
 
 [remote-signer-config]
 # The list of signer urls in the format http://covenant_pk@signer_host:port
-urls = ["http://02f071ad9a03c3c13c0ce0107c89269edd9d3ed16c42aeaf72572e1135af34b81f@http://127.0.0.1:9791", ]
+urls = ["http://03d4625ae15c25c380e131a0a95e23612805f0f314ef5a39ff6cba2a7e3c06f5d9@http://127.0.0.1:9791", ]
 # The timeout of each request to the remote signing server
 timeout_seconds = 2
+
+[metrics-config]
+# Enable reporting metrics
+enabled = false
+# IP of the Prometheus server
+host = "127.0.0.1"
+# Port of the Prometheus server
+port = 2112
