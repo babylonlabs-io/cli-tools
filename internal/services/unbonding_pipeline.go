@@ -374,11 +374,6 @@ func (up *UnbondingPipeline) ProcessNewTransactions(ctx context.Context) error {
 		return err
 	}
 
-	if len(unbondingTransactions) == 0 {
-		up.logger.Info("No unbonding new transactions to process")
-		return nil
-	}
-
 	defer func() {
 		if up.Metrics.Config.Enabled {
 			if err := up.pushMetrics(); err != nil {
@@ -386,6 +381,11 @@ func (up *UnbondingPipeline) ProcessNewTransactions(ctx context.Context) error {
 			}
 		}
 	}()
+
+	if len(unbondingTransactions) == 0 {
+		up.logger.Info("No unbonding new transactions to process")
+		return nil
+	}
 
 	if err := up.processUnbondingTransactions(ctx, unbondingTransactions); err != nil {
 		return err
