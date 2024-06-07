@@ -35,7 +35,7 @@ var processFailedTxCmd = &cobra.Command{
 			return err
 		}
 
-		parsedGlobalParams, err := services.NewGlobalParams(globalParamPath)
+		parsedGlobalParams, err := services.NewVersionedParamsRetriever(globalParamPath)
 
 		if err != nil {
 			return err

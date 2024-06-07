@@ -21,6 +21,7 @@ import (
 	"github.com/babylonchain/covenant-signer/signerapp"
 	"github.com/babylonchain/covenant-signer/signerservice"
 	"github.com/babylonchain/covenant-signer/utils"
+	"github.com/babylonchain/networks/parameters/parser"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -67,7 +68,7 @@ type TestManager struct {
 	pipeLine            *services.UnbondingPipeline
 	testStoreController *services.PersistentUnbondingStorage
 	signingServer       *signerservice.SigningServer
-	parameters          *services.ParsedGlobalParams
+	parameters          *parser.ParsedGlobalParams
 }
 
 type stakingData struct {
@@ -150,13 +151,17 @@ func StartManager(
 
 	appConfig.Signer = *signerCfg
 
-	var gp = services.ParsedGlobalParams{}
+	var gp = parser.ParsedGlobalParams{}
 
-	ver := services.ParsedVersionedGlobalParams{
+	ver := parser.ParsedVersionedGlobalParams{
 		Version:        0,
 		CovenantPks:    signerGlobalParams.Versions[0].CovenantPks,
 		CovenantQuorum: signerGlobalParams.Versions[0].CovenantQuorum,
 		Tag:            magicBytes,
+	}
+
+	params := services.VersionedParamsRetriever{
+		ParsedGlobalParams: &gp,
 	}
 
 	gp.Versions = append(gp.Versions, &ver)
@@ -186,7 +191,7 @@ func StartManager(
 	pipeLine, err := services.NewUnbondingPipelineFromConfig(
 		logger,
 		appConfig,
-		&gp,
+		&params,
 	)
 	require.NoError(t, err)
 
@@ -223,7 +228,7 @@ func StartManager(
 func startSigningServer(
 	t *testing.T,
 	magicBytes []byte,
-) (*config.RemoteSignerConfig, *signerapp.ParsedGlobalParams, *signerservice.SigningServer) {
+) (*config.RemoteSignerConfig, *parser.ParsedGlobalParams, *signerservice.SigningServer) {
 	appConfig := signercfg.DefaultConfig()
 	appConfig.BtcNodeConfig.Host = "127.0.0.1:18443"
 	appConfig.BtcNodeConfig.User = "user"
@@ -287,8 +292,8 @@ func startSigningServer(
 	chainInfo := signerapp.NewBitcoindChainInfo(client)
 	signer := signerapp.NewPsbtSigner(client)
 
-	signerGlobalParams := signerapp.ParsedGlobalParams{
-		Versions: []*signerapp.ParsedVersionedGlobalParams{
+	signerGlobalParams := parser.ParsedGlobalParams{
+		Versions: []*parser.ParsedVersionedGlobalParams{
 			{
 				Version:           0,
 				ActivationHeight:  0,
@@ -310,7 +315,9 @@ func startSigningServer(
 	app := signerapp.NewSignerApp(
 		signer,
 		chainInfo,
-		&signerGlobalParams,
+		&signerapp.VersionedParamsRetriever{
+			ParsedGlobalParams: &signerGlobalParams,
+		},
 		netParams,
 	)
 
