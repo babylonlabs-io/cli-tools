@@ -76,7 +76,7 @@ type UnbondingPipeline struct {
 func NewUnbondingPipelineFromConfig(
 	logger *slog.Logger,
 	cfg *config.Config,
-	ret *ParsedGlobalParams,
+	ret *VersionedParamsRetriever,
 ) (*UnbondingPipeline, error) {
 
 	db, err := db.New(context.TODO(), cfg.Db.DbName, cfg.Db.Address)
