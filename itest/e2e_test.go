@@ -17,6 +17,7 @@ import (
 	staking "github.com/babylonchain/babylon/btcstaking"
 	signerbtccli "github.com/babylonchain/covenant-signer/btcclient"
 	signercfg "github.com/babylonchain/covenant-signer/config"
+	"github.com/babylonchain/covenant-signer/observability/metrics"
 	"github.com/babylonchain/covenant-signer/signerapp"
 	"github.com/babylonchain/covenant-signer/signerservice"
 	"github.com/babylonchain/covenant-signer/utils"
@@ -317,6 +318,7 @@ func startSigningServer(
 		context.Background(),
 		parsedconfig,
 		app,
+		metrics.NewCovenantSignerMetrics(),
 	)
 
 	require.NoError(t, err)
