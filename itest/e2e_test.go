@@ -228,7 +228,7 @@ func StartManager(
 func startSigningServer(
 	t *testing.T,
 	magicBytes []byte,
-) (*config.RemoteSignerConfig, *signerapp.ParsedGlobalParams, *signerservice.SigningServer) {
+) (*config.RemoteSignerConfig, *parser.ParsedGlobalParams, *signerservice.SigningServer) {
 	appConfig := signercfg.DefaultConfig()
 	appConfig.BtcNodeConfig.Host = "127.0.0.1:18443"
 	appConfig.BtcNodeConfig.User = "user"
@@ -292,8 +292,8 @@ func startSigningServer(
 	chainInfo := signerapp.NewBitcoindChainInfo(client)
 	signer := signerapp.NewPsbtSigner(client)
 
-	signerGlobalParams := signerapp.ParsedGlobalParams{
-		Versions: []*signerapp.ParsedVersionedGlobalParams{
+	signerGlobalParams := parser.ParsedGlobalParams{
+		Versions: []*parser.ParsedVersionedGlobalParams{
 			{
 				Version:           0,
 				ActivationHeight:  0,
@@ -315,7 +315,9 @@ func startSigningServer(
 	app := signerapp.NewSignerApp(
 		signer,
 		chainInfo,
-		&signerGlobalParams,
+		&signerapp.VersionedParamsRetriever{
+			ParsedGlobalParams: &signerGlobalParams,
+		},
 		netParams,
 	)
 

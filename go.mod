@@ -50,6 +50,7 @@ require (
 
 require (
 	github.com/babylonchain/covenant-signer v0.1.2
+	github.com/babylonchain/networks/parameters v0.2.0
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.4
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
@@ -91,7 +92,6 @@ require (
 	github.com/aead/siphash v1.0.1 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/aws/aws-sdk-go v1.44.312 // indirect
-	github.com/babylonchain/networks/parameters v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/bgentry/speakeasy v0.1.1-0.20220910012023-760eaf8b6816 // indirect
@@ -327,4 +327,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/babylonchain/covenant-signer => github.com/babylonchain/covenant-signer v0.1.2
+replace github.com/babylonchain/covenant-signer => github.com/babylonchain/covenant-signer-private v0.2.0

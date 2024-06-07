@@ -279,8 +279,8 @@ github.com/aws/aws-sdk-go v1.44.312/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8
 github.com/aws/aws-sdk-go-v2 v0.18.0/go.mod h1:JWVYvqSMppoMJC0x5wdwiImzgXTI9FuZwxzkQq9wy+g=
 github.com/babylonchain/babylon v0.8.6-0.20240426101001-7778c798e236 h1:Ydna4VcP56xu1+zdgygqHdSCeMduZjuznVhr4exO5do=
 github.com/babylonchain/babylon v0.8.6-0.20240426101001-7778c798e236/go.mod h1:lfeASLNJgcUsX7LEns3HRUv0k+MjzcB2q2AMasfz38M=
-github.com/babylonchain/covenant-signer v0.1.2 h1:MaiMG2Rouw+wsA4PhWUtx9/WCYh0Y9r1rMENvzYs8zY=
-github.com/babylonchain/covenant-signer v0.1.2/go.mod h1:alX7NoDE2m7gW4O17hLAsluU30P0XaP5RlThAco8Y9Q=
+github.com/babylonchain/covenant-signer-private v0.2.0 h1:/Z6o9KLDSSHz0A3M/bUKzTjSr7pKX6cIG36tRE/4UzQ=
+github.com/babylonchain/covenant-signer-private v0.2.0/go.mod h1:eJOoz//rsRCCrAhop+/EqXcnsEgPEy+T8LO7ak6dBHo=
 github.com/babylonchain/networks/parameters v0.2.0 h1:f3e1MwMFm33mIKji7AgQk39aO9YIfbCbbjXtQHEQ99E=
 github.com/babylonchain/networks/parameters v0.2.0/go.mod h1:nejhvrL7Iwh5Vunvkg7pnomQZlHnyNzOY9lQaDp6tOA=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
