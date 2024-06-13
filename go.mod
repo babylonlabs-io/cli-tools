@@ -327,4 +327,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/babylonchain/covenant-signer => github.com/babylonchain/covenant-signer-private v0.2.0
+replace github.com/babylonchain/covenant-signer => github.com/babylonchain/covenant-signer-private v0.2.3
