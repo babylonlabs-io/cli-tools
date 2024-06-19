@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/babylonchain/babylon/types"
 	"github.com/babylonchain/cli-tools/internal/btcclient"
 	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/babylonchain/cli-tools/internal/db"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/prometheus/client_golang/prometheus/push"
 )
@@ -22,11 +24,26 @@ var (
 	// code, or we allowed some invalid data into database.
 	// When this happend we stop processing pipeline and return immediately, without
 	// changing status of any unbonding transaction.
-	ErrCriticalError = fmt.Errorf("critical error encountered")
+	ErrCriticalError = fmt.Errorf("critical error")
 )
 
-func wrapCrititical(err error) error {
-	return fmt.Errorf("%s:%w", err.Error(), ErrCriticalError)
+func mustBtcTxToHex(tx *wire.MsgTx) string {
+	bytes, err := types.SerializeBTCTx(tx)
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(bytes)
+}
+
+func wrapCrititical(
+	stakingTx *wire.MsgTx,
+	stakingTxHash *chainhash.Hash,
+	err error,
+) error {
+	stakingTxHex := mustBtcTxToHex(stakingTx)
+	return fmt.Errorf(
+		"err: %s, staking_tx_haxh:%s, staking_tx:%s: %w", err.Error(), stakingTxHash.String(), stakingTxHex, ErrCriticalError,
+	)
 }
 
 func pubKeyToStringSchnorr(pubKey *btcec.PublicKey) string {
@@ -247,6 +264,7 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		utx := tx
 
 		stakingOutputFromDb := utx.StakingOutput()
+
 		stakingTxHash := utx.UnbondingTransaction.TxIn[0].PreviousOutPoint.Hash
 
 		stakingTxInfo, err := up.sender.TxByHash(
@@ -257,14 +275,22 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		// if the staking transaction is not found in btc chain, it means something is wrong
 		// as staking service should not allow to create unbonding transaction without staking transaction
 		if err != nil {
-			return wrapCrititical(err)
+			return wrapCrititical(
+				utx.StakingTransactionData.StakingTransaction,
+				&stakingTxHash,
+				err,
+			)
 		}
 
 		params, err := up.retriever.ParamsByHeight(ctx, uint64(stakingTxInfo.TxInclusionHeight))
 
 		// we should always be able to retrieve params for the height of the staking transaction
 		if err != nil {
-			return wrapCrititical(err)
+			return wrapCrititical(
+				utx.StakingTransactionData.StakingTransaction,
+				&stakingTxHash,
+				err,
+			)
 		}
 
 		stakingOutputRecovered, unbondingPathSpendInfo, err := CreateUnbondingPathSpendInfo(
@@ -274,7 +300,11 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		)
 
 		if err != nil {
-			return wrapCrititical(err)
+			return wrapCrititical(
+				utx.StakingTransactionData.StakingTransaction,
+				&stakingTxHash,
+				err,
+			)
 		}
 
 		// This the last line check before sending unbonding transaction for signing. It checks
@@ -285,7 +315,11 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		// - pipeline is run on bad BTC network
 		// - stakingApi service has a bug
 		if !outputsAreEqual(stakingOutputRecovered, stakingOutputFromDb) {
-			return wrapCrititical(fmt.Errorf("staking output from staking tx and staking output re-build from params are different"))
+			return wrapCrititical(
+				utx.StakingTransactionData.StakingTransaction,
+				&stakingTxHash,
+				fmt.Errorf("staking output from staking tx and staking output re-build from params are different"),
+			)
 		}
 
 		sigs, err := up.signUnbondingTransaction(
@@ -297,7 +331,26 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		)
 
 		if err != nil {
-			return wrapCrititical(err)
+			up.Metrics.RecordFailedCovenantQuorum()
+
+			unbondingTxHex := mustBtcTxToHex(utx.UnbondingTransaction)
+
+			up.logger.Error("Failed to get quorum of covenant signatures to unbond",
+				"staking_tx_hash", tx.StakingTransactionData.StakingTransaction.TxHash().String(),
+				"unbonding_tx_hash", tx.UnbondingTransactionHash.String(),
+				"unbonding_tx", unbondingTxHex,
+			)
+
+			// Note that we failed to get signatures from covenant members
+			if err := up.store.SetUnbondingTransactionFailedToGetCovenantSignatures(ctx, utx); err != nil {
+				return wrapCrititical(
+					utx.StakingTransactionData.StakingTransaction,
+					&stakingTxHash,
+					err,
+				)
+			}
+
+			continue
 		}
 
 		up.logger.Info("Successfully collected quorum of covenant signatures to unbond",
@@ -315,7 +368,11 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		)
 
 		if err != nil {
-			return wrapCrititical(err)
+			return wrapCrititical(
+				utx.StakingTransactionData.StakingTransaction,
+				&stakingTxHash,
+				err,
+			)
 		}
 
 		// We assume that this is valid unbodning transaction, with 1 input
@@ -331,7 +388,11 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 			up.logger.Info("The input of the unbonding transaction has already been spent",
 				slog.String("staking_tx_hash", stakingTxHash.String()))
 			if err := up.store.SetUnbondingTransactionInputAlreadySpent(ctx, utx); err != nil {
-				return wrapCrititical(err)
+				return wrapCrititical(
+					utx.StakingTransactionData.StakingTransaction,
+					&stakingTxHash,
+					err,
+				)
 			}
 			continue
 		}
@@ -341,7 +402,11 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		if err != nil {
 			up.logger.Error("Failed to send unbonding transaction", "error", err)
 			if err := up.store.SetUnbondingTransactionProcessingFailed(ctx, utx); err != nil {
-				return wrapCrititical(err)
+				return wrapCrititical(
+					utx.StakingTransactionData.StakingTransaction,
+					&stakingTxHash,
+					err,
+				)
 			}
 			up.Metrics.RecordFailedUnbodingTransaction()
 		} else {
@@ -350,7 +415,11 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 				slog.String("tx_hash", hash.String()),
 			)
 			if err := up.store.SetUnbondingTransactionProcessed(ctx, utx); err != nil {
-				return wrapCrititical(err)
+				return wrapCrititical(
+					utx.StakingTransactionData.StakingTransaction,
+					&stakingTxHash,
+					err,
+				)
 			}
 			up.Metrics.RecordSentUnbondingTransaction()
 		}
@@ -398,12 +467,6 @@ func (up *UnbondingPipeline) ProcessNewTransactions(ctx context.Context) error {
 func (up *UnbondingPipeline) ProcessFailedTransactions(ctx context.Context) error {
 	up.logger.Info("Running unbonding pipeline for failed transactions")
 
-	unbondingTransactions, err := up.store.GetFailedUnbondingTransactions(ctx)
-
-	if err != nil {
-		return err
-	}
-
 	defer func() {
 		if up.Metrics.Config.Enabled {
 			if err := up.pushMetrics(); err != nil {
@@ -412,9 +475,22 @@ func (up *UnbondingPipeline) ProcessFailedTransactions(ctx context.Context) erro
 		}
 	}()
 
-	if len(unbondingTransactions) == 0 {
-		up.logger.Info("No failed unbonding transactions to process")
-		return nil
+	// 1. First process transactions that failed to get quorum of covenant signatures
+	unbondingTxWithNoQuorum, err := up.store.GetUnbondingTransactionsWithNoQuorum(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if err := up.processUnbondingTransactions(ctx, unbondingTxWithNoQuorum); err != nil {
+		return err
+	}
+
+	// 2. Second process other failed unbonding transactions
+	unbondingTransactions, err := up.store.GetFailedUnbondingTransactions(ctx)
+
+	if err != nil {
+		return err
 	}
 
 	if err := up.processUnbondingTransactions(ctx, unbondingTransactions); err != nil {

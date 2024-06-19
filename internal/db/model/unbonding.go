@@ -9,13 +9,11 @@ const (
 type UnbondingState string
 
 const (
-	Inserted UnbondingState = "INSERTED"
-	Send     UnbondingState = "SEND"
-	// TODO: This is not used now, but it will be necessary to cover the case when
-	// we try to send unbonding transaction but someone already withdrew the staking
-	// output
-	InputAlreadySpent UnbondingState = "INPUT_ALREADY_SPENT"
-	Failed            UnbondingState = "FAILED"
+	Inserted                      UnbondingState = "INSERTED"
+	Send                          UnbondingState = "SEND"
+	InputAlreadySpent             UnbondingState = "INPUT_ALREADY_SPENT"
+	Failed                        UnbondingState = "FAILED"
+	FailedToGetCovenantSignatures UnbondingState = "FAILED_TO_GET_COVENANT_SIGNATURES"
 )
 
 type UnbondingDocument struct {

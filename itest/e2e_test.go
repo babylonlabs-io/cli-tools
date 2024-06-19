@@ -6,7 +6,6 @@ package e2etest
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -634,7 +633,7 @@ func (tm *TestManager) updateSchnorSigInDb(newSig *schnorr.Signature, txHash *ch
 	require.NoError(tm.t, err)
 }
 
-func TestHandlingCriticalError(t *testing.T) {
+func TestHandlingCriticalSigningError(t *testing.T) {
 	m := StartManager(t, 10, true)
 	d := defaultStakingData()
 
@@ -669,10 +668,11 @@ func TestHandlingCriticalError(t *testing.T) {
 
 	// 2. Run pipeline
 	err = m.pipeLine.ProcessNewTransactions(context.Background())
-	require.Error(t, err)
-	// With invalid signature in db, signers will refuse to sign it, which should end
-	// with critical error
-	require.True(t, errors.Is(err, services.ErrCriticalError))
+	require.NoError(t, err)
 
-	// TODO:Find a way to simulate bitcoind not accepting transaction
+	failedQuorumTx, err := m.testStoreController.GetUnbondingTransactionsWithNoQuorum(context.TODO())
+	require.NoError(t, err)
+	require.Len(t, failedQuorumTx, 1)
+	// check that it is in fact our tx with invalid schnorr signature
+	require.Equal(t, invalidSchnorrSigBytes, failedQuorumTx[0].UnbondingTransactionSig.Serialize())
 }
