@@ -10,6 +10,7 @@ type PipelineMetrics struct {
 	FailedSigningReqs          *prometheus.CounterVec
 	SuccessfulSentTransactions prometheus.Counter
 	FailureSentTransactions    prometheus.Counter
+	FailureToGetCovenantQuorum prometheus.Counter
 	Config                     *config.MetricsConfig
 }
 
@@ -41,6 +42,12 @@ func NewPipelineMetrics(cfg *config.MetricsConfig) *PipelineMetrics {
 				Help: "How many transactions failed to be sent to the network",
 			},
 		),
+		FailureToGetCovenantQuorum: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "number_of_failed_covenant_quorums",
+				Help: "How many times we failed to get covenant quorum for signing request",
+			},
+		),
 		Config: cfg,
 	}
 }
@@ -59,4 +66,8 @@ func (pm *PipelineMetrics) RecordSentUnbondingTransaction() {
 
 func (pm *PipelineMetrics) RecordFailedUnbodingTransaction() {
 	pm.FailureSentTransactions.Inc()
+}
+
+func (pm *PipelineMetrics) RecordFailedCovenantQuorum() {
+	pm.FailureToGetCovenantQuorum.Inc()
 }

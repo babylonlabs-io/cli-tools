@@ -14,10 +14,11 @@ import (
 type state string
 
 const (
-	inserted          state = "inserted"
-	send              state = "send"
-	inputAlreadySpent state = "input_already_spent"
-	failed            state = "failed"
+	inserted             state = "inserted"
+	send                 state = "send"
+	inputAlreadySpent    state = "input_already_spent"
+	failed               state = "failed"
+	failedToGetSignatues state = "failed_to_get_covenant_signatures"
 )
 
 type unbondingTxDataWithCounter struct {
@@ -136,6 +137,35 @@ func (s *InMemoryUnbondingStore) GetFailedUnbondingTransactions(ctx context.Cont
 	return resUnbondingTxData, nil
 }
 
+func (s *InMemoryUnbondingStore) GetUnbondingTransactionsWithNoQuorum(ctx context.Context) ([]*UnbondingTxData, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var res []*unbondingTxDataWithCounter
+
+	for _, tx := range s.mapping {
+		txCopy := tx
+		// get only failed transactions
+		if tx.state == failedToGetSignatues {
+			res = append(res, txCopy)
+		}
+	}
+
+	// sort by counter
+	sort.SliceStable(res, func(i, j int) bool {
+		return res[i].Counter < res[j].Counter
+	})
+
+	// convert to UnbondingTxData
+	var resUnbondingTxData []*UnbondingTxData
+	for _, tx := range res {
+		txCopy := tx
+		resUnbondingTxData = append(resUnbondingTxData, &txCopy.UnbondingTxData)
+	}
+
+	return resUnbondingTxData, nil
+}
+
 func (s *InMemoryUnbondingStore) SetUnbondingTransactionProcessed(_ context.Context, utx *UnbondingTxData) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -177,6 +207,21 @@ func (s *InMemoryUnbondingStore) SetUnbondingTransactionInputAlreadySpent(_ cont
 	}
 
 	tx.state = inputAlreadySpent
+
+	return nil
+}
+
+func (s *InMemoryUnbondingStore) SetUnbondingTransactionFailedToGetCovenantSignatures(_ context.Context, utx *UnbondingTxData) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, exists := s.mapping[*utx.UnbondingTransactionHash]
+
+	if !exists {
+		return fmt.Errorf("tx with hash %s does not exist", *utx.UnbondingTransactionHash)
+	}
+
+	tx.state = failedToGetSignatues
 
 	return nil
 }

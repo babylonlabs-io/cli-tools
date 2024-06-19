@@ -226,6 +226,13 @@ func (s *PersistentUnbondingStorage) GetFailedUnbondingTransactions(ctx context.
 	)
 }
 
+func (s *PersistentUnbondingStorage) GetUnbondingTransactionsWithNoQuorum(ctx context.Context) ([]*UnbondingTxData, error) {
+	return transformDocuments(
+		ctx,
+		s.client.FindUnbondingDocumentsWithNoCovenantQuorum,
+	)
+}
+
 func (s *PersistentUnbondingStorage) GetNotProcessedUnbondingTransactions(ctx context.Context) ([]*UnbondingTxData, error) {
 	return transformDocuments(
 		ctx,
@@ -246,4 +253,9 @@ func (s *PersistentUnbondingStorage) SetUnbondingTransactionProcessingFailed(ctx
 func (s *PersistentUnbondingStorage) SetUnbondingTransactionInputAlreadySpent(ctx context.Context, utx *UnbondingTxData) error {
 	txHash := utx.UnbondingTransactionHash.String()
 	return s.client.SetUnbondingDocumentFailed(ctx, txHash)
+}
+
+func (s *PersistentUnbondingStorage) SetUnbondingTransactionFailedToGetCovenantSignatures(ctx context.Context, utx *UnbondingTxData) error {
+	txHash := utx.UnbondingTransactionHash.String()
+	return s.client.SetUnbondingDocumentFailedToGetCovenantSignatures(ctx, txHash)
 }

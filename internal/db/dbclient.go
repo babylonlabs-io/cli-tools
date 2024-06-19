@@ -97,6 +97,10 @@ func (db *Database) FindFailedUnbodningDocuments(ctx context.Context) ([]model.U
 	return db.findUnbondingDocumentsWithState(ctx, model.Failed)
 }
 
+func (db *Database) FindUnbondingDocumentsWithNoCovenantQuorum(ctx context.Context) ([]model.UnbondingDocument, error) {
+	return db.findUnbondingDocumentsWithState(ctx, model.FailedToGetCovenantSignatures)
+}
+
 func (db *Database) FindSendUnbondingDocuments(ctx context.Context) ([]model.UnbondingDocument, error) {
 	return db.findUnbondingDocumentsWithState(ctx, model.Send)
 }
@@ -128,4 +132,10 @@ func (db *Database) SetUnbondingDocumentInputAlreadySpent(
 	ctx context.Context,
 	unbondingTxHashHex string) error {
 	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.InputAlreadySpent)
+}
+
+func (db *Database) SetUnbondingDocumentFailedToGetCovenantSignatures(
+	ctx context.Context,
+	unbondingTxHashHex string) error {
+	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.FailedToGetCovenantSignatures)
 }

@@ -125,9 +125,13 @@ type UnbondingStore interface {
 
 	GetFailedUnbondingTransactions(ctx context.Context) ([]*UnbondingTxData, error)
 
+	GetUnbondingTransactionsWithNoQuorum(ctx context.Context) ([]*UnbondingTxData, error)
+
 	SetUnbondingTransactionProcessed(ctx context.Context, utx *UnbondingTxData) error
 
 	SetUnbondingTransactionProcessingFailed(ctx context.Context, utx *UnbondingTxData) error
 
 	SetUnbondingTransactionInputAlreadySpent(ctx context.Context, utx *UnbondingTxData) error
+
+	SetUnbondingTransactionFailedToGetCovenantSignatures(ctx context.Context, utx *UnbondingTxData) error
 }
