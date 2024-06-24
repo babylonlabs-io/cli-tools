@@ -41,7 +41,7 @@ func (rs *RemoteSigner) SignUnbondingTransaction(req *SignRequest) (*PubKeySigPa
 		req.UnbondingTransaction,
 		req.StakerUnbondingSig,
 		req.SignerPubKey,
-		req.UnbondingScript,
+		req.FundingOutput.PkScript,
 	)
 
 	if err != nil {

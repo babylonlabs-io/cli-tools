@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/babylonchain/babylon/btcstaking"
 	"github.com/babylonchain/babylon/types"
 	"github.com/babylonchain/cli-tools/internal/btcclient"
 	"github.com/babylonchain/cli-tools/internal/config"
@@ -172,10 +173,13 @@ func (up *UnbondingPipeline) signUnbondingTransaction(
 			unbondingTransaction,
 			stakerSig,
 			fundingOutput,
-			unbondingScript,
 			pk,
 		)
-		go up.requestSigFromCovenant(req, resultChan)
+		go up.requestSigFromCovenant(
+			req,
+			unbondingScript,
+			resultChan,
+		)
 	}
 
 	// check all the results
@@ -200,7 +204,12 @@ func (up *UnbondingPipeline) signUnbondingTransaction(
 	return signatures[:params.CovenantQuorum], nil
 }
 
-func (up *UnbondingPipeline) requestSigFromCovenant(req *SignRequest, resultChan chan *SignResult) {
+// requestSigFromCovenant sends a request to the covenant signer
+// unbondingScript argument is necessary to verify the signature
+func (up *UnbondingPipeline) requestSigFromCovenant(
+	req *SignRequest,
+	unbondingScript []byte,
+	resultChan chan *SignResult) {
 	pkStr := pubKeyToStringCompressed(req.SignerPubKey)
 	up.logger.Debug("request signatures from covenant signer",
 		"signer_pk", pkStr)
@@ -214,13 +223,32 @@ func (up *UnbondingPipeline) requestSigFromCovenant(req *SignRequest, resultChan
 			"error", err)
 
 		res.Err = err
-	} else {
-		up.Metrics.RecordSuccessSigningRequest(pkStr)
-		up.logger.Debug("got signatures from covenant signer", "signer_pk", pkStr)
-
-		res.PubKeySig = sigPair
+		resultChan <- &res
+		return
 	}
 
+	// verify the signature
+	if err := btcstaking.VerifyTransactionSigWithOutput(
+		req.UnbondingTransaction,
+		req.FundingOutput,
+		unbondingScript,
+		req.SignerPubKey,
+		sigPair.Signature.Serialize(),
+	); err != nil {
+		up.Metrics.RecordFailedSigningRequest(pkStr)
+		up.logger.Error("failed to verify signature from covenant member",
+			"signer_pk", pkStr,
+			"error", err,
+		)
+		res.Err = fmt.Errorf("error verify signature from covenant %s: %w", pkStr, err)
+		resultChan <- &res
+		return
+	}
+
+	up.Metrics.RecordSuccessSigningRequest(pkStr)
+	up.logger.Debug("got signatures from covenant signer", "signer_pk", pkStr)
+
+	res.PubKeySig = sigPair
 	resultChan <- &res
 }
 
@@ -326,7 +354,7 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 			utx.UnbondingTransaction,
 			utx.UnbondingTransactionSig,
 			stakingOutputRecovered,
-			stakingOutputRecovered.PkScript,
+			unbondingPathSpendInfo.RevealedLeaf.Script,
 			params,
 		)
 
