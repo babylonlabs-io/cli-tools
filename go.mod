@@ -50,7 +50,7 @@ require (
 
 require (
 	github.com/babylonchain/covenant-signer v0.1.2
-	github.com/babylonchain/networks/parameters v0.2.0
+	github.com/babylonchain/networks/parameters v0.2.1
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.4
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
@@ -327,4 +327,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/babylonchain/covenant-signer => github.com/babylonchain/covenant-signer-private v0.2.3
+replace github.com/babylonchain/covenant-signer => github.com/babylonchain/covenant-signer-private v0.2.5
