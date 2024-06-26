@@ -6,15 +6,22 @@ toolchain go1.22.4
 
 require (
 	github.com/babylonchain/babylon v0.8.6-0.20240426101001-7778c798e236
+	github.com/babylonchain/covenant-signer v0.2.5
+	github.com/babylonchain/networks/parameters v0.2.1
 	github.com/btcsuite/btcd v0.24.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.5
+	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
+	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.4
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
+	github.com/golang/mock v1.6.0
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/lightningnetwork/lnd v0.16.4-beta.rc1
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe // indirect
 	github.com/ory/dockertest/v3 v3.10.0
+	github.com/prometheus/client_golang v1.18.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.9.0
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -46,16 +53,6 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-)
-
-require (
-	github.com/babylonchain/covenant-signer v0.1.2
-	github.com/babylonchain/networks/parameters v0.2.1
-	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
-	github.com/btcsuite/btcwallet/wallet/txauthor v1.3.4
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
-	github.com/golang/mock v1.6.0
-	github.com/prometheus/client_golang v1.18.0
 )
 
 require (
@@ -326,5 +323,3 @@ require (
 	pgregory.net/rapid v1.1.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/babylonchain/covenant-signer => github.com/babylonchain/covenant-signer-private v0.2.5
