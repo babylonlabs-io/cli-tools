@@ -27,6 +27,6 @@ func (g *VersionedParamsRetriever) ParamsByHeight(_ context.Context, height uint
 	return &SystemParams{
 		CovenantPublicKeys: versionedParams.CovenantPks,
 		CovenantQuorum:     versionedParams.CovenantQuorum,
-		MagicBytes:         versionedParams.Tag,
+		Tag:                versionedParams.Tag,
 	}, nil
 }

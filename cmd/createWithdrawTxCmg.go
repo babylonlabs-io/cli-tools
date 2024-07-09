@@ -4,13 +4,14 @@ import (
 	"fmt"
 
 	"github.com/babylonchain/babylon/btcstaking"
-	"github.com/babylonchain/cli-tools/internal/btcclient"
-	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/spf13/cobra"
+
+	"github.com/babylonchain/cli-tools/internal/btcclient"
+	"github.com/babylonchain/cli-tools/internal/config"
 )
 
 var (
@@ -24,8 +25,8 @@ func init() {
 	// parsing it wil fail
 	createWithdrawCmd.Flags().String(FlagStakingTxHex, "", "funded staking tx hex")
 	_ = createWithdrawCmd.MarkFlagRequired(FlagStakingTxHex)
-	createWithdrawCmd.Flags().String(FlagMagicBytes, "", "magic bytes")
-	_ = createWithdrawCmd.MarkFlagRequired(FlagMagicBytes)
+	createWithdrawCmd.Flags().String(FlagTag, "", "tag")
+	_ = createWithdrawCmd.MarkFlagRequired(FlagTag)
 	createWithdrawCmd.Flags().Int64(FlagWithdrawTxFee, 0, "withdraw fee")
 	_ = createWithdrawCmd.MarkFlagRequired(FlagWithdrawTxFee)
 	createWithdrawCmd.Flags().StringSlice(FlagCovenantCommitteePks, nil, "covenant committee pks")
@@ -74,7 +75,7 @@ var createWithdrawCmd = &cobra.Command{
 			return err
 		}
 
-		magicBytes, err := parseMagicBytesFromHex(mustGetStringFlag(cmd, FlagMagicBytes))
+		tag, err := parseTagFromHex(mustGetStringFlag(cmd, FlagTag))
 
 		if err != nil {
 			return err
@@ -118,7 +119,7 @@ var createWithdrawCmd = &cobra.Command{
 
 		parsedStakingTx, err := btcstaking.ParseV0StakingTx(
 			stakingTx,
-			magicBytes,
+			tag,
 			covenantCommitteePks,
 			covenantQuorum,
 			btcParams,
