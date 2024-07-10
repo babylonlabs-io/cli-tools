@@ -214,7 +214,7 @@ func StartManager(
 	}
 
 	if runMongodb {
-		testDbConnection, err := db.New(context.TODO(), appConfig.Db.DbName, appConfig.Db.Address)
+		testDbConnection, err := db.New(context.TODO(), appConfig.Db)
 		require.NoError(t, err)
 
 		storeController := services.NewPersistentUnbondingStorage(testDbConnection)
@@ -622,7 +622,7 @@ func TestSendingFreshTransactions(t *testing.T) {
 }
 
 func (tm *TestManager) updateSchnorSigInDb(newSig *schnorr.Signature, txHash *chainhash.Hash) {
-	db, err := db.New(context.TODO(), tm.pipeLineConfig.Db.DbName, tm.pipeLineConfig.Db.Address)
+	db, err := db.New(context.TODO(), tm.pipeLineConfig.Db)
 	require.NoError(tm.t, err)
 	txHashHex := txHash.String()
 	client := db.Client.Database(db.DbName).Collection(model.UnbondingCollection)
