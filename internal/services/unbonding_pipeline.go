@@ -97,7 +97,7 @@ func NewUnbondingPipelineFromConfig(
 	ret *VersionedParamsRetriever,
 ) (*UnbondingPipeline, error) {
 
-	db, err := db.New(context.TODO(), cfg.Db.DbName, cfg.Db.Address)
+	db, err := db.New(context.TODO(), cfg.Db)
 
 	if err != nil {
 		return nil, err

@@ -194,6 +194,10 @@ func (m *Manager) RunMongoDbResource() (*dockertest.Resource, error) {
 		ExposedPorts: []string{
 			"27017",
 		},
+		Env: []string{
+			"MONGO_INITDB_ROOT_USERNAME=root",
+			"MONGO_INITDB_ROOT_PASSWORD=example",
+		},
 	},
 		dockerConf,
 	)
