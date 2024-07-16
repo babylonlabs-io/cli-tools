@@ -58,7 +58,7 @@ func CreateUnbondingPathSpendInfo(
 	net *chaincfg.Params,
 ) (*wire.TxOut, *staking.SpendInfo, error) {
 	info, err := staking.BuildV0IdentifiableStakingOutputs(
-		params.MagicBytes,
+		params.Tag,
 		stakingInfo.StakerPk,
 		stakingInfo.FinalityProviderPk,
 		params.CovenantPublicKeys,

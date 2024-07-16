@@ -5,14 +5,15 @@ import (
 	"fmt"
 
 	"github.com/babylonchain/babylon/btcstaking"
-	"github.com/babylonchain/cli-tools/internal/btcclient"
-	"github.com/babylonchain/cli-tools/internal/config"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/spf13/cobra"
+
+	"github.com/babylonchain/cli-tools/internal/btcclient"
+	"github.com/babylonchain/cli-tools/internal/config"
 )
 
 var (
@@ -31,8 +32,8 @@ func init() {
 	// parsing it wil fail
 	createUnbondingTxCmd.Flags().String(FlagStakingTxHex, "", "funded staking tx hex")
 	_ = createUnbondingTxCmd.MarkFlagRequired(FlagStakingTxHex)
-	createUnbondingTxCmd.Flags().String(FlagMagicBytes, "", "magic bytes")
-	_ = createUnbondingTxCmd.MarkFlagRequired(FlagMagicBytes)
+	createUnbondingTxCmd.Flags().String(FlagTag, "", "tag")
+	_ = createUnbondingTxCmd.MarkFlagRequired(FlagTag)
 	createUnbondingTxCmd.Flags().Int64(FlagUnbondingTime, 0, "unbonding time")
 	_ = createUnbondingTxCmd.MarkFlagRequired(FlagUnbondingTime)
 	createUnbondingTxCmd.Flags().Int64(FlagUnbondingTxFee, 0, "unbonding fee")
@@ -142,7 +143,7 @@ var createUnbondingTxCmd = &cobra.Command{
 			return err
 		}
 
-		magicBytes, err := parseMagicBytesFromHex(mustGetStringFlag(cmd, FlagMagicBytes))
+		tag, err := parseTagFromHex(mustGetStringFlag(cmd, FlagTag))
 
 		if err != nil {
 			return err
@@ -180,7 +181,7 @@ var createUnbondingTxCmd = &cobra.Command{
 
 		parsedStakingTx, err := btcstaking.ParseV0StakingTx(
 			stakingTx,
-			magicBytes,
+			tag,
 			covenantCommitteePks,
 			covenantQuorum,
 			btcParams,
