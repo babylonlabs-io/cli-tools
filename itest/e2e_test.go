@@ -62,7 +62,7 @@ type TestManager struct {
 	stakerAddress       btcutil.Address
 	stakerPrivKey       *btcec.PrivateKey
 	stakerPubKey        *btcec.PublicKey
-	magicBytes          []byte
+	tag                 []byte
 	pipeLineConfig      *config.Config
 	pipeLine            *services.UnbondingPipeline
 	testStoreController *services.PersistentUnbondingStorage
@@ -145,8 +145,8 @@ func StartManager(
 	appConfig.Btc.Pass = "pass"
 	appConfig.Btc.Network = netParams.Name
 
-	magicBytes := []byte{0x0, 0x1, 0x2, 0x3}
-	signerCfg, signerGlobalParams, signingServer := startSigningServer(t, magicBytes)
+	tag := []byte{0x0, 0x1, 0x2, 0x3}
+	signerCfg, signerGlobalParams, signingServer := startSigningServer(t, tag)
 
 	appConfig.Signer = *signerCfg
 
@@ -156,7 +156,7 @@ func StartManager(
 		Version:        0,
 		CovenantPks:    signerGlobalParams.Versions[0].CovenantPks,
 		CovenantQuorum: signerGlobalParams.Versions[0].CovenantQuorum,
-		Tag:            magicBytes,
+		Tag:            tag,
 	}
 
 	params := services.VersionedParamsRetriever{
@@ -205,7 +205,7 @@ func StartManager(
 		stakerAddress:       walletAddress,
 		stakerPrivKey:       stakerPrivKey,
 		stakerPubKey:        stakerPrivKey.PubKey(),
-		magicBytes:          []byte{0x0, 0x1, 0x2, 0x3},
+		tag:                 []byte{0x0, 0x1, 0x2, 0x3},
 		pipeLineConfig:      appConfig,
 		pipeLine:            pipeLine,
 		testStoreController: nil,
@@ -226,7 +226,7 @@ func StartManager(
 
 func startSigningServer(
 	t *testing.T,
-	magicBytes []byte,
+	tag []byte,
 ) (*config.RemoteSignerConfig, *parser.ParsedGlobalParams, *signerservice.SigningServer) {
 	appConfig := signercfg.DefaultConfig()
 	appConfig.BtcNodeConfig.Host = "127.0.0.1:18443"
@@ -297,7 +297,7 @@ func startSigningServer(
 				Version:           0,
 				ActivationHeight:  0,
 				StakingCap:        btcutil.Amount(100000000000),
-				Tag:               magicBytes,
+				Tag:               tag,
 				CovenantQuorum:    quorum,
 				CovenantPks:       []*btcec.PublicKey{localCovenantKey1, localCovenantKey2},
 				ConfirmationDepth: 1,
@@ -350,7 +350,7 @@ type stakingTxSigInfo struct {
 
 func (tm *TestManager) sendStakingTxToBtc(d *stakingData) *stakingTxSigInfo {
 	info, err := staking.BuildV0IdentifiableStakingOutputs(
-		tm.magicBytes,
+		tm.tag,
 		tm.stakerPubKey,
 		tm.finalityProviderKey.PubKey(),
 		tm.covenantPublicKeys,
@@ -392,7 +392,7 @@ func (tm *TestManager) createUnbondingTxAndSignByStaker(
 ) *unbondingTxWithMetadata {
 
 	info, err := staking.BuildV0IdentifiableStakingOutputs(
-		tm.magicBytes,
+		tm.tag,
 		tm.stakerPubKey,
 		tm.finalityProviderKey.PubKey(),
 		tm.covenantPublicKeys,

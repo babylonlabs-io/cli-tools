@@ -9,15 +9,16 @@ import (
 
 	"github.com/babylonchain/babylon/btcstaking"
 	"github.com/babylonchain/babylon/types"
-	"github.com/babylonchain/cli-tools/internal/btcclient"
-	"github.com/babylonchain/cli-tools/internal/config"
-	"github.com/babylonchain/cli-tools/internal/db"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/prometheus/client_golang/prometheus/push"
+
+	"github.com/babylonchain/cli-tools/internal/btcclient"
+	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonchain/cli-tools/internal/db"
 )
 
 var (
@@ -58,18 +59,18 @@ func pubKeyToStringCompressed(pubKey *btcec.PublicKey) string {
 type SystemParamsRetriever struct {
 	CovenantPublicKeys []*btcec.PublicKey
 	CovenantQuorum     uint32
-	MagicBytes         []byte
+	Tag                []byte
 }
 
 func NewSystemParamsRetriever(
 	quorum uint32,
 	pubKeys []*btcec.PublicKey,
-	magicBytes []byte,
+	tag []byte,
 ) *SystemParamsRetriever {
 	return &SystemParamsRetriever{
 		CovenantQuorum:     quorum,
 		CovenantPublicKeys: pubKeys,
-		MagicBytes:         magicBytes,
+		Tag:                tag,
 	}
 }
 
@@ -77,7 +78,7 @@ func (p *SystemParamsRetriever) GetParams() (*SystemParams, error) {
 	return &SystemParams{
 		CovenantQuorum:     p.CovenantQuorum,
 		CovenantPublicKeys: p.CovenantPublicKeys,
-		MagicBytes:         p.MagicBytes,
+		Tag:                p.Tag,
 	}, nil
 }
 

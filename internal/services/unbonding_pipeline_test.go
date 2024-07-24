@@ -5,10 +5,6 @@ import (
 	"testing"
 
 	"github.com/babylonchain/babylon/btcstaking"
-	"github.com/babylonchain/cli-tools/internal/config"
-	"github.com/babylonchain/cli-tools/internal/logger"
-	"github.com/babylonchain/cli-tools/internal/mocks"
-	"github.com/babylonchain/cli-tools/internal/services"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -17,11 +13,16 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonchain/cli-tools/internal/logger"
+	"github.com/babylonchain/cli-tools/internal/mocks"
+	"github.com/babylonchain/cli-tools/internal/services"
 )
 
 var (
 	testParams = chaincfg.MainNetParams
-	magicBytes = []byte{0x00, 0x01, 0x02, 0x03}
+	tag        = []byte{0x00, 0x01, 0x02, 0x03}
 )
 
 type MockedDependencies struct {
@@ -56,7 +57,7 @@ func NewUnbondingData(
 	fpKey, err := btcec.NewPrivateKey()
 	require.NoError(t, err)
 	stakingInfo, stakingTx, err := btcstaking.BuildV0IdentifiableStakingOutputsAndTx(
-		magicBytes,
+		tag,
 		stakerPubKey,
 		fpKey.PubKey(),
 		covenantInfo.GetCovenantPublicKeys(),
@@ -183,7 +184,7 @@ func TestValidSigningFlow(t *testing.T) {
 	deps.pr.EXPECT().ParamsByHeight(gomock.Any(), uint64(stakingTxHeight)).Return(&services.SystemParams{
 		CovenantPublicKeys: covenantMembers.GetCovenantPublicKeys(),
 		CovenantQuorum:     covenantQuorum,
-		MagicBytes:         magicBytes,
+		Tag:                tag,
 	}, nil)
 	deps.cs.EXPECT().SignUnbondingTransaction(gomock.Any()).Return(covenantSignatures[0], nil)
 	deps.bs.EXPECT().CheckTxOutSpendable(
@@ -229,7 +230,7 @@ func TestInvalidSignatureHandling(t *testing.T) {
 	deps.pr.EXPECT().ParamsByHeight(gomock.Any(), uint64(stakingTxHeight)).Return(&services.SystemParams{
 		CovenantPublicKeys: covenantMembers.GetCovenantPublicKeys(),
 		CovenantQuorum:     covenantQuorum,
-		MagicBytes:         magicBytes,
+		Tag:                tag,
 	}, nil)
 
 	// tamper signature so it is invalid

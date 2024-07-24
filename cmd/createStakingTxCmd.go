@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	FlagMagicBytes           = "magic-bytes"
+	FlagTag                  = "tag"
 	FlagStakerPk             = "staker-pk"
 	FlagStakingAmount        = "staking-amount"
 	FlagStakingTime          = "staking-time"
@@ -186,17 +186,17 @@ func parseTimeLock(timeBlocks int64) (uint16, error) {
 	return uint16(timeBlocks), nil
 }
 
-func parseMagicBytesFromHex(magicBytesHex string) ([]byte, error) {
-	magicBytes, err := hex.DecodeString(magicBytesHex)
+func parseTagFromHex(tagHex string) ([]byte, error) {
+	tag, err := hex.DecodeString(tagHex)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(magicBytes) != btcstaking.MagicBytesLen {
-		return nil, fmt.Errorf("magic bytes should be of length %d", btcstaking.MagicBytesLen)
+	if len(tag) != btcstaking.TagLen {
+		return nil, fmt.Errorf("tag should be of length %d", btcstaking.TagLen)
 	}
 
-	return magicBytes, nil
+	return tag, nil
 }
 
 func parsePosNum(num int64) (uint32, error) {
@@ -216,8 +216,8 @@ type CreateStakingTxResp struct {
 }
 
 func init() {
-	createStakingTxCmd.Flags().String(FlagMagicBytes, "", "magic bytes")
-	_ = createStakingTxCmd.MarkFlagRequired(FlagMagicBytes)
+	createStakingTxCmd.Flags().String(FlagTag, "", "tag")
+	_ = createStakingTxCmd.MarkFlagRequired(FlagTag)
 	createStakingTxCmd.Flags().String(FlagStakerPk, "", "staker pk")
 	_ = createStakingTxCmd.MarkFlagRequired(FlagStakerPk)
 	createStakingTxCmd.Flags().String(FlagFinalityProviderPk, "", "finality provider pk")
@@ -246,7 +246,7 @@ var createStakingTxCmd = &cobra.Command{
 			return err
 		}
 
-		magicBytes, err := parseMagicBytesFromHex(mustGetStringFlag(cmd, FlagMagicBytes))
+		tag, err := parseTagFromHex(mustGetStringFlag(cmd, FlagTag))
 
 		if err != nil {
 			return err
@@ -289,7 +289,7 @@ var createStakingTxCmd = &cobra.Command{
 		}
 
 		_, tx, err := btcstaking.BuildV0IdentifiableStakingOutputsAndTx(
-			magicBytes,
+			tag,
 			stakerPk,
 			finalityProviderPk,
 			covenantCommitteePks,
