@@ -12,12 +12,12 @@ RUN apk add --no-cache --update openssh git make build-base linux-headers libc-d
                                 libzmq-static libsodium-static gcc
 
 # Build
-WORKDIR /go/src/github.com/babylonchain/cli-tools
+WORKDIR /go/src/github.com/babylonlabs-io/cli-tools
 # Cache dependencies
-COPY go.mod go.sum /go/src/github.com/babylonchain/cli-tools/
+COPY go.mod go.sum /go/src/github.com/babylonlabs-io/cli-tools/
 RUN go mod download
 # Copy the rest of the files
-COPY ./ /go/src/github.com/babylonchain/cli-tools/
+COPY ./ /go/src/github.com/babylonlabs-io/cli-tools/
 
 RUN CGO_LDFLAGS="$CGO_LDFLAGS -lstdc++ -lm -lsodium" \
     CGO_ENABLED=1 \
@@ -32,7 +32,7 @@ RUN addgroup --gid 1138 -S cli-tools && adduser --uid 1138 -S cli-tools -G cli-t
 
 RUN apk add bash curl jq
 
-COPY --from=builder /go/src/github.com/babylonchain/cli-tools/build/cli-tools /bin/cli-tools
+COPY --from=builder /go/src/github.com/babylonlabs-io/cli-tools/build/cli-tools /bin/cli-tools
 
 WORKDIR /home/cli-tools
 RUN chown -R cli-tools /home/cli-tools

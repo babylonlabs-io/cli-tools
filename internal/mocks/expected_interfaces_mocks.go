@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	services "github.com/babylonchain/cli-tools/internal/services"
+	services "github.com/babylonlabs-io/cli-tools/internal/services"
 	chainhash "github.com/btcsuite/btcd/chaincfg/chainhash"
 	wire "github.com/btcsuite/btcd/wire"
 	gomock "github.com/golang/mock/gomock"

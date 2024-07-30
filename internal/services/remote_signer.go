@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/babylonchain/covenant-signer/signerservice"
+	"github.com/babylonlabs-io/covenant-signer/signerservice"
 
-	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
 )
 
 type RemoteSigner struct {
