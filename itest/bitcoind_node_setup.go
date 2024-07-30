@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/babylonchain/cli-tools/itest/containers"
+	"github.com/babylonlabs-io/cli-tools/itest/containers"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"

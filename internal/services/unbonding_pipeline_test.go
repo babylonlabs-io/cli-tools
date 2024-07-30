@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/babylonchain/babylon/btcstaking"
+	"github.com/babylonlabs-io/babylon/btcstaking"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -14,10 +14,10 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/babylonchain/cli-tools/internal/config"
-	"github.com/babylonchain/cli-tools/internal/logger"
-	"github.com/babylonchain/cli-tools/internal/mocks"
-	"github.com/babylonchain/cli-tools/internal/services"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/logger"
+	"github.com/babylonlabs-io/cli-tools/internal/mocks"
+	"github.com/babylonlabs-io/cli-tools/internal/services"
 )
 
 var (

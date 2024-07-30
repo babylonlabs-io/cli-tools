@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	staking "github.com/babylonchain/babylon/btcstaking"
+	staking "github.com/babylonlabs-io/babylon/btcstaking"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg"

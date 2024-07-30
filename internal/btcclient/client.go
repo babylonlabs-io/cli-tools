@@ -15,7 +15,7 @@ import (
 	"github.com/btcsuite/btcwallet/wallet/txauthor"
 	notifier "github.com/lightningnetwork/lnd/chainntnfs"
 
-	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
 )
 
 type TxStatus int

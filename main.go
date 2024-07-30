@@ -1,6 +1,6 @@
 package main
 
-import "github.com/babylonchain/cli-tools/cmd"
+import "github.com/babylonlabs-io/cli-tools/cmd"
 
 func main() {
 	_ = cmd.Execute()

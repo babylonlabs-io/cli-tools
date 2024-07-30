@@ -7,8 +7,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/babylonchain/cli-tools/internal/config"
-	"github.com/babylonchain/cli-tools/internal/db/model"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/db/model"
 )
 
 type Database struct {
