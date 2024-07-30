@@ -3,15 +3,15 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/babylonchain/babylon/btcstaking"
+	"github.com/babylonlabs-io/babylon/btcstaking"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/spf13/cobra"
 
-	"github.com/babylonchain/cli-tools/internal/btcclient"
-	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/btcclient"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
 )
 
 var (

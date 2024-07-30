@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/babylonchain/babylon/btcstaking"
-	"github.com/babylonchain/babylon/types"
+	"github.com/babylonlabs-io/babylon/btcstaking"
+	"github.com/babylonlabs-io/babylon/types"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -16,9 +16,9 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/prometheus/client_golang/prometheus/push"
 
-	"github.com/babylonchain/cli-tools/internal/btcclient"
-	"github.com/babylonchain/cli-tools/internal/config"
-	"github.com/babylonchain/cli-tools/internal/db"
+	"github.com/babylonlabs-io/cli-tools/internal/btcclient"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/db"
 )
 
 var (

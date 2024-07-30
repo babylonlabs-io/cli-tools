@@ -3,7 +3,7 @@ package services
 import (
 	"fmt"
 
-	"github.com/babylonchain/cli-tools/internal/btcclient"
+	"github.com/babylonlabs-io/cli-tools/internal/btcclient"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )

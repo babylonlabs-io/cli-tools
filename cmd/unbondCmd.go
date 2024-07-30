@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 
-	"github.com/babylonchain/cli-tools/internal/config"
-	"github.com/babylonchain/cli-tools/internal/logger"
-	"github.com/babylonchain/cli-tools/internal/services"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/logger"
+	"github.com/babylonlabs-io/cli-tools/internal/services"
 
 	"github.com/spf13/cobra"
 )

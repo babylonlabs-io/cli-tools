@@ -11,8 +11,8 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 
-	"github.com/babylonchain/cli-tools/internal/db"
-	"github.com/babylonchain/cli-tools/internal/db/model"
+	"github.com/babylonlabs-io/cli-tools/internal/db"
+	"github.com/babylonlabs-io/cli-tools/internal/db/model"
 )
 
 func newBTCTxFromBytes(txBytes []byte) (*wire.MsgTx, error) {

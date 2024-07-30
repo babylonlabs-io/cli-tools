@@ -20,10 +20,10 @@ Install Go by following the instructions on the official Go installation [guide]
 To get started, clone the repository to your local machine from GitHub; please
 use the version according to the phase-1 system guidelines --
 you can find all versions in the official
-[releases](https://github.com/babylonchain/cli-tools/releases) page.
+[releases](https://github.com/babylonlabs-io/cli-tools/releases) page.
 
 ```shell
-git clone https://github.com/babylonchain/cli-tools.git
+git clone https://github.com/babylonlabs-io/cli-tools.git
 cd cli-tools
 git checkout <release-tag>
 ```

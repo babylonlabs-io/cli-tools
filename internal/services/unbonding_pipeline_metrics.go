@@ -1,7 +1,7 @@
 package services
 
 import (
-	"github.com/babylonchain/cli-tools/internal/config"
+	"github.com/babylonlabs-io/cli-tools/internal/config"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/babylonchain/networks/parameters/parser"
+	"github.com/babylonlabs-io/networks/parameters/parser"
 )
 
 type VersionedParamsRetriever struct {
