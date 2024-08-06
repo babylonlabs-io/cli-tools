@@ -282,6 +282,7 @@ func (up *UnbondingPipeline) pushMetrics() error {
 		Collector(up.Metrics.FailedSigningReqs).
 		Collector(up.Metrics.SuccessfulSentTransactions).
 		Collector(up.Metrics.FailureSentTransactions).
+		Collector(up.Metrics.FailureToGetCovenantQuorum).
 		Push()
 }
 
