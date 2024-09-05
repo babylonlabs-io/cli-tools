@@ -121,7 +121,11 @@ func documentToData(d *model.UnbondingDocument) (*UnbondingTxData, error) {
 	}
 
 	// TODO: Check if there are better types at mongo level
+	//#nosec G115 - safe conversion, data is coming from the database and
+	// data in db is always validated
 	stakingValue := btcutil.Amount(int64(d.StakingAmount))
+	//#nosec G115 - safe conversion, data is coming from the database and
+	// data in db is always validated
 	stakingTime := uint16(d.StakingTimelock)
 
 	si := &StakingInfo{
@@ -183,6 +187,7 @@ func (s *PersistentUnbondingStorage) AddTxWithSignature(
 		stakingtTxData.StakingOutputIdx,
 		stakingTxHashHex,
 		uint64(info.StakingTimelock),
+		//#nosec G115 - safe conversion, staking amoutn will always be positive
 		uint64(info.StakingAmount),
 	)
 
