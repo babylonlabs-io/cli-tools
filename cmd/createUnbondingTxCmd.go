@@ -23,8 +23,9 @@ var (
 
 	FlagStakerWalletAddressHost = "staker-wallet-address-host"
 	FlagStakerWalletRpcUser     = "staker-wallet-rpc-user"
-	FlagStakerWalletRpcPass     = "staker-wallet-rpc-pass"
-	FlagWalletPassphrase        = "staker-wallet-passphrase"
+	//#nosec G101 - false positive
+	FlagStakerWalletRpcPass = "staker-wallet-rpc-pass"
+	FlagWalletPassphrase    = "staker-wallet-passphrase"
 )
 
 func init() {
