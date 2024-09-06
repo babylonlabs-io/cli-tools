@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -119,6 +120,9 @@ func CreateTimestampTx(
 	}
 	fundingTxHash := fundingTx.TxHash()
 	fundingInput := wire.NewTxIn(
+		//#nosec G115 - in theory this function can be called with bogus transactions
+		// with more than math.MaxUint32 outputs, but in practic caller would be shoting
+		// himself in the foot.
 		wire.NewOutPoint(&fundingTxHash, uint32(fundingOutputIdx)),
 		nil,
 		nil,
@@ -151,7 +155,9 @@ func CreateTimestampTx(
 }
 
 func txOutTimestampFile(filePath string) (txOut *wire.TxOut, fileHash []byte, err error) {
-	fileHash, err = hashFromFile(filePath)
+	fileHash, err = hashFromFile(
+		filepath.Clean(filePath),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate hash from file %s: %w", filePath, err)
 	}
@@ -167,7 +173,9 @@ func txOutTimestampFile(filePath string) (txOut *wire.TxOut, fileHash []byte, er
 func hashFromFile(filePath string) ([]byte, error) {
 	h := sha256.New()
 
-	f, err := os.Open(filePath)
+	f, err := os.Open(
+		filepath.Clean(filePath),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open the file %s: %w", filePath, err)
 	}

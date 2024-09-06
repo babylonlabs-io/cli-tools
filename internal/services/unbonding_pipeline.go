@@ -409,6 +409,7 @@ func (up *UnbondingPipeline) processUnbondingTransactions(
 		utx.UnbondingTransaction.TxIn[0].Witness = witness
 
 		// TODO do we need to check the mempool?
+		//#nosec G115 - data is coming from the database, so this is valid staking transaction
 		spendable, err := up.sender.CheckTxOutSpendable(&stakingTxHash, uint32(utx.StakingTransactionData.StakingOutputIdx), true)
 		if err != nil {
 			up.logger.Error("Failed to check whether the staking output is spendable", "error", err)
