@@ -6,7 +6,7 @@ toolchain go1.22.4
 
 require (
 	github.com/babylonlabs-io/babylon v0.9.0
-	github.com/babylonlabs-io/covenant-signer v0.2.9
+	github.com/babylonlabs-io/covenant-signer v0.2.11
 	github.com/babylonlabs-io/networks/parameters v0.2.2
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
