@@ -145,7 +145,7 @@ The following set of commands are used to create phase-1 compatible transactions
 with the goal to ease up testing of the phase-1 system:
 - `create-phase1-staking-tx`
 - `create-phase1-unbonding-request`
-- `create-phase1-withdaw-request`
+- `create-phase1-withdraw-request`
 
 Disclaimer: Those commands should only be used for testing purposes and should not be
 used with real BTC.
