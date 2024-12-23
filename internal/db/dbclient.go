@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -112,10 +113,10 @@ func (db *Database) FindSendUnbondingDocuments(ctx context.Context) ([]model.Unb
 
 func (db *Database) updateUnbondingDocumentState(
 	ctx context.Context,
-	unbondingTxHashHex string,
+	id primitive.ObjectID,
 	newState model.UnbondingState) error {
 	client := db.Client.Database(db.DbName).Collection(model.UnbondingCollection)
-	filter := bson.M{"unbonding_tx_hash_hex": unbondingTxHashHex}
+	filter := bson.M{"_id": id}
 	update := bson.M{"$set": bson.M{"state": newState}}
 	_, err := client.UpdateOne(ctx, filter, update)
 	return err
@@ -123,24 +124,24 @@ func (db *Database) updateUnbondingDocumentState(
 
 func (db *Database) SetUnbondingDocumentSend(
 	ctx context.Context,
-	unbondingTxHashHex string) error {
-	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.Send)
+	id primitive.ObjectID) error {
+	return db.updateUnbondingDocumentState(ctx, id, model.Send)
 }
 
 func (db *Database) SetUnbondingDocumentFailed(
 	ctx context.Context,
-	unbondingTxHashHex string) error {
-	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.Failed)
+	id primitive.ObjectID) error {
+	return db.updateUnbondingDocumentState(ctx, id, model.Failed)
 }
 
 func (db *Database) SetUnbondingDocumentInputAlreadySpent(
 	ctx context.Context,
-	unbondingTxHashHex string) error {
-	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.InputAlreadySpent)
+	id primitive.ObjectID) error {
+	return db.updateUnbondingDocumentState(ctx, id, model.InputAlreadySpent)
 }
 
 func (db *Database) SetUnbondingDocumentFailedToGetCovenantSignatures(
 	ctx context.Context,
-	unbondingTxHashHex string) error {
-	return db.updateUnbondingDocumentState(ctx, unbondingTxHashHex, model.FailedToGetCovenantSignatures)
+	id primitive.ObjectID) error {
+	return db.updateUnbondingDocumentState(ctx, id, model.FailedToGetCovenantSignatures)
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type state string
@@ -35,8 +36,9 @@ func newUnbondingTxDataWithCounter(
 	sd *StakingTransactionData,
 	counter int,
 ) *unbondingTxDataWithCounter {
+	nullId := primitive.NilObjectID
 	return &unbondingTxDataWithCounter{
-		UnbondingTxData: *NewUnbondingTxData(tx, hash, sig, info, sd),
+		UnbondingTxData: *NewUnbondingTxData(nullId, tx, hash, sig, info, sd),
 		Counter:         counter,
 		state:           inserted,
 	}
