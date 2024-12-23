@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Minimal set of data necessary to sign unbonding transaction
@@ -85,6 +86,7 @@ type StakingTransactionData struct {
 }
 
 type UnbondingTxData struct {
+	UnbondingDocID           primitive.ObjectID
 	UnbondingTransaction     *wire.MsgTx
 	UnbondingTransactionHash *chainhash.Hash
 	UnbondingTransactionSig  *schnorr.Signature
@@ -97,6 +99,7 @@ func (u UnbondingTxData) StakingOutput() *wire.TxOut {
 }
 
 func NewUnbondingTxData(
+	id primitive.ObjectID,
 	tx *wire.MsgTx,
 	hash *chainhash.Hash,
 	sig *schnorr.Signature,
@@ -104,6 +107,7 @@ func NewUnbondingTxData(
 	sd *StakingTransactionData,
 ) *UnbondingTxData {
 	return &UnbondingTxData{
+		UnbondingDocID:           id,
 		UnbondingTransaction:     tx,
 		UnbondingTransactionHash: hash,
 		UnbondingTransactionSig:  sig,
