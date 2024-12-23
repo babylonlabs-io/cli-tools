@@ -146,7 +146,7 @@ func documentToData(d *model.UnbondingDocument) (*UnbondingTxData, error) {
 		StakingOutputIdx:   d.StakingOutputIndex,
 	}
 
-	return NewUnbondingTxData(tx, unbondingTxHash, sig, si, sd), nil
+	return NewUnbondingTxData(*d.ID, tx, unbondingTxHash, sig, si, sd), nil
 }
 
 func (s *PersistentUnbondingStorage) AddTxWithSignature(
@@ -246,21 +246,17 @@ func (s *PersistentUnbondingStorage) GetNotProcessedUnbondingTransactions(ctx co
 }
 
 func (s *PersistentUnbondingStorage) SetUnbondingTransactionProcessed(ctx context.Context, utx *UnbondingTxData) error {
-	txHash := utx.UnbondingTransactionHash.String()
-	return s.client.SetUnbondingDocumentSend(ctx, txHash)
+	return s.client.SetUnbondingDocumentSend(ctx, utx.UnbondingDocID)
 }
 
 func (s *PersistentUnbondingStorage) SetUnbondingTransactionProcessingFailed(ctx context.Context, utx *UnbondingTxData) error {
-	txHash := utx.UnbondingTransactionHash.String()
-	return s.client.SetUnbondingDocumentFailed(ctx, txHash)
+	return s.client.SetUnbondingDocumentFailed(ctx, utx.UnbondingDocID)
 }
 
 func (s *PersistentUnbondingStorage) SetUnbondingTransactionInputAlreadySpent(ctx context.Context, utx *UnbondingTxData) error {
-	txHash := utx.UnbondingTransactionHash.String()
-	return s.client.SetUnbondingDocumentFailed(ctx, txHash)
+	return s.client.SetUnbondingDocumentInputAlreadySpent(ctx, utx.UnbondingDocID)
 }
 
 func (s *PersistentUnbondingStorage) SetUnbondingTransactionFailedToGetCovenantSignatures(ctx context.Context, utx *UnbondingTxData) error {
-	txHash := utx.UnbondingTransactionHash.String()
-	return s.client.SetUnbondingDocumentFailedToGetCovenantSignatures(ctx, txHash)
+	return s.client.SetUnbondingDocumentFailedToGetCovenantSignatures(ctx, utx.UnbondingDocID)
 }
