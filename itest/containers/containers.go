@@ -142,14 +142,6 @@ func (m *Manager) RunBitcoindResource(
 				"18443",
 				"18444",
 			},
-			PortBindings: map[docker.Port][]docker.PortBinding{
-				"8332/tcp":  {{HostIP: "", HostPort: "8332"}},
-				"8333/tcp":  {{HostIP: "", HostPort: "8333"}},
-				"28332/tcp": {{HostIP: "", HostPort: "28332"}},
-				"28333/tcp": {{HostIP: "", HostPort: "28333"}},
-				"18443/tcp": {{HostIP: "", HostPort: "18443"}},
-				"18444/tcp": {{HostIP: "", HostPort: "18444"}},
-			},
 			Cmd: []string{
 				"-regtest",
 				"-txindex",
@@ -211,4 +203,8 @@ func (m *Manager) RunMongoDbResource() (*dockertest.Resource, error) {
 
 func (m *Manager) MongoHost() string {
 	return m.resources[mongoContainerName].GetHostPort("27017/tcp")
+}
+
+func (m *Manager) BitcoindHost() string {
+	return m.resources[bitcoindContainerName].GetHostPort("18443/tcp")
 }

@@ -140,13 +140,13 @@ func StartManager(
 	// only outputs which are 100 deep are mature
 	_ = h.GenerateBlocks(int(numMatureOutputsInWallet) + 100)
 
-	appConfig.Btc.Host = "127.0.0.1:18443"
+	appConfig.Btc.Host = m.BitcoindHost()
 	appConfig.Btc.User = "user"
 	appConfig.Btc.Pass = "pass"
 	appConfig.Btc.Network = netParams.Name
 
 	tag := []byte{0x0, 0x1, 0x2, 0x3}
-	signerCfg, signerGlobalParams, signingServer := startSigningServer(t, tag)
+	signerCfg, signerGlobalParams, signingServer := startSigningServer(t, tag, m)
 
 	appConfig.Signer = *signerCfg
 
@@ -227,9 +227,10 @@ func StartManager(
 func startSigningServer(
 	t *testing.T,
 	tag []byte,
+	m *containers.Manager,
 ) (*config.RemoteSignerConfig, *parser.ParsedGlobalParams, *signerservice.SigningServer) {
 	appConfig := signercfg.DefaultConfig()
-	appConfig.BtcNodeConfig.Host = "127.0.0.1:18443"
+	appConfig.BtcNodeConfig.Host = m.BitcoindHost()
 	appConfig.BtcNodeConfig.User = "user"
 	appConfig.BtcNodeConfig.Pass = "pass"
 	appConfig.BtcNodeConfig.Network = netParams.Name
