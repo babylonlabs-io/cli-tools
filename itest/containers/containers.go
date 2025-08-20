@@ -36,6 +36,7 @@ type Manager struct {
 	resources             map[string]*dockertest.Resource
 	bitcoindContainerName string
 	mongoContainerName    string
+	bitcoindHost          string // Store the dynamically assigned RPC port
 }
 
 // NewManager creates a new Manager instance and initializes
@@ -149,12 +150,7 @@ func (m *Manager) RunBitcoindResource(
 				fmt.Sprintf("%s/:/data/.bitcoin", bitcoindCfgPath),
 			},
 			ExposedPorts: []string{
-				"8332",
-				"8333",
-				"28332",
-				"28333",
 				"18443",
-				"18444",
 			},
 			Cmd: []string{
 				"-regtest",
@@ -171,6 +167,7 @@ func (m *Manager) RunBitcoindResource(
 		return nil, err
 	}
 	m.resources[m.bitcoindContainerName] = bitcoindResource
+	m.bitcoindHost = bitcoindResource.GetHostPort("18443/tcp")
 	return bitcoindResource, nil
 }
 
@@ -234,5 +231,5 @@ func (m *Manager) MongoHost() string {
 }
 
 func (m *Manager) BitcoindHost() string {
-	return m.resources[m.bitcoindContainerName].GetHostPort("18443/tcp")
+	return m.bitcoindHost
 }
