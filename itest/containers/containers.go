@@ -18,6 +18,12 @@ import (
 
 var errRegex = regexp.MustCompile(`(E|e)rror`)
 
+// PortManagerInterface defines the interface for port management
+type PortManagerInterface interface {
+	AllocatePort() (int, error)
+	ReleasePort(port int)
+}
+
 // generateTestHash creates a short hash from the test name for unique container naming
 func generateTestHash(testName string) string {
 	hash := sha256.Sum256([]byte(testName))
@@ -37,11 +43,13 @@ type Manager struct {
 	bitcoindContainerName string
 	mongoContainerName    string
 	bitcoindHost          string // Store the dynamically assigned RPC port
+	allocatedPort         int    // Store allocated port for cleanup
+	portManager           PortManagerInterface // Port manager for dynamic allocation
 }
 
 // NewManager creates a new Manager instance and initializes
 // all Docker specific utilities. Returns an error if initialization fails.
-func NewManager(t *testing.T) (docker *Manager, err error) {
+func NewManager(t *testing.T, pm PortManagerInterface) (docker *Manager, err error) {
 	// Generate unique container names based on test name to avoid conflicts between tests
 	testHash := generateTestHash(t.Name())
 	docker = &Manager{
@@ -49,6 +57,7 @@ func NewManager(t *testing.T) (docker *Manager, err error) {
 		resources:             make(map[string]*dockertest.Resource),
 		bitcoindContainerName: fmt.Sprintf("bitcoind-test-%s", testHash),
 		mongoContainerName:    fmt.Sprintf("mongo-test-%s", testHash),
+		portManager:           pm,
 	}
 	docker.pool, err = dockertest.NewPool("")
 	if err != nil {
@@ -140,6 +149,16 @@ func (m *Manager) ExecCmd(t *testing.T, containerName string, command []string) 
 func (m *Manager) RunBitcoindResource(
 	bitcoindCfgPath string,
 ) (*dockertest.Resource, error) {
+	// Pre-allocate a port using our port manager to avoid CI conflicts
+	rpcPort, err := m.portManager.AllocatePort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate port for bitcoind: %w", err)
+	}
+
+	// Store the allocated port immediately
+	m.bitcoindHost = fmt.Sprintf("127.0.0.1:%d", rpcPort)
+	m.allocatedPort = rpcPort
+
 	bitcoindResource, err := m.pool.RunWithOptions(
 		&dockertest.RunOptions{
 			Name:       m.bitcoindContainerName,
@@ -151,6 +170,9 @@ func (m *Manager) RunBitcoindResource(
 			},
 			ExposedPorts: []string{
 				"18443",
+			},
+			PortBindings: map[docker.Port][]docker.PortBinding{
+				"18443/tcp": {{HostIP: "", HostPort: fmt.Sprintf("%d", rpcPort)}},
 			},
 			Cmd: []string{
 				"-regtest",
@@ -164,10 +186,11 @@ func (m *Manager) RunBitcoindResource(
 		dockerConf,
 	)
 	if err != nil {
+		// Release the port if container creation failed
+		m.portManager.ReleasePort(rpcPort)
 		return nil, err
 	}
 	m.resources[m.bitcoindContainerName] = bitcoindResource
-	m.bitcoindHost = bitcoindResource.GetHostPort("18443/tcp")
 	return bitcoindResource, nil
 }
 
@@ -180,6 +203,12 @@ func (m *Manager) ClearResources() error {
 				return err
 			}
 		}
+	}
+
+	// Release the allocated port
+	if m.allocatedPort != 0 {
+		m.portManager.ReleasePort(m.allocatedPort)
+		m.allocatedPort = 0
 	}
 
 	return nil
