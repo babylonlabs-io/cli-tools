@@ -156,14 +156,6 @@ func (m *Manager) RunBitcoindResource(
 				"18443",
 				"18444",
 			},
-			PortBindings: map[docker.Port][]docker.PortBinding{
-				"8332/tcp":  {{HostIP: "", HostPort: ""}},
-				"8333/tcp":  {{HostIP: "", HostPort: ""}},
-				"28332/tcp": {{HostIP: "", HostPort: ""}},
-				"28333/tcp": {{HostIP: "", HostPort: ""}},
-				"18443/tcp": {{HostIP: "", HostPort: ""}},
-				"18444/tcp": {{HostIP: "", HostPort: ""}},
-			},
 			Cmd: []string{
 				"-regtest",
 				"-txindex",

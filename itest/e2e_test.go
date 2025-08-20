@@ -48,7 +48,8 @@ const (
 )
 
 var (
-	netParams = &chaincfg.RegressionNetParams
+	netParams   = &chaincfg.RegressionNetParams
+	portManager = NewPortManager() // Global port manager for all tests
 )
 
 type TestManager struct {
@@ -269,7 +270,9 @@ func startSigningServer(
 
 	quorum := uint32(2)
 	host := "127.0.0.1"
-	port := 9791
+	// Allocate an available port to avoid conflicts between tests, especially in CI
+	port, err := portManager.AllocatePort()
+	require.NoError(t, err)
 	covenantPksStr := []string{
 		hex.EncodeToString(localCovenantKey1.SerializeCompressed()),
 		hex.EncodeToString(localCovenantKey2.SerializeCompressed()),
@@ -339,6 +342,7 @@ func startSigningServer(
 
 	t.Cleanup(func() {
 		_ = server.Stop(context.TODO())
+		portManager.ReleasePort(port)
 	})
 
 	return signerCfg, &signerGlobalParams, server
