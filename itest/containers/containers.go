@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,8 +21,11 @@ var errRegex = regexp.MustCompile(`(E|e)rror`)
 // generateTestHash creates a short hash from the test name for unique container naming
 func generateTestHash(testName string) string {
 	hash := sha256.Sum256([]byte(testName))
-	// Use first 8 characters of hex for readability
-	return hex.EncodeToString(hash[:])[:8]
+	// Use first 8 characters of hex for readability and add timestamp for extra uniqueness in CI
+	hashStr := hex.EncodeToString(hash[:])[:8]
+	// Add timestamp suffix for CI environments where tests might run in rapid succession
+	timestamp := fmt.Sprintf("%d", time.Now().UnixNano()%100000)
+	return fmt.Sprintf("%s-%s", hashStr, timestamp)
 }
 
 // Manager is a wrapper around all Docker instances, and the Docker API.
@@ -182,11 +186,25 @@ func (m *Manager) RunBitcoindResource(
 func (m *Manager) ClearResources() error {
 	for _, resource := range m.resources {
 		if err := m.pool.Purge(resource); err != nil {
-			return err
+			// In CI environments, containers might already be gone, so ignore "not found" errors
+			if !isNotFoundError(err) {
+				return err
+			}
 		}
 	}
 
 	return nil
+}
+
+// isNotFoundError checks if the error is due to container not being found
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "No such container") ||
+		strings.Contains(errStr, "not found") ||
+		strings.Contains(errStr, "404")
 }
 
 func dockerConf(config *docker.HostConfig) {
