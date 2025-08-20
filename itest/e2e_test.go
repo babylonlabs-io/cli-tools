@@ -115,7 +115,7 @@ func StartManager(
 	runMongodb bool,
 ) *TestManager {
 	logger := logger.DefaultLogger()
-	m, err := containers.NewManager()
+	m, err := containers.NewManager(t)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = m.ClearResources()

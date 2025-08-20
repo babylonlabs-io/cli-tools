@@ -3,6 +3,8 @@ package containers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"testing"
@@ -13,27 +15,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	bitcoindContainerName = "bitcoind-test"
-	mongoContainerName    = "mongo-test"
-)
-
 var errRegex = regexp.MustCompile(`(E|e)rror`)
+
+// generateTestHash creates a short hash from the test name for unique container naming
+func generateTestHash(testName string) string {
+	hash := sha256.Sum256([]byte(testName))
+	// Use first 8 characters of hex for readability
+	return hex.EncodeToString(hash[:])[:8]
+}
 
 // Manager is a wrapper around all Docker instances, and the Docker API.
 // It provides utilities to run and interact with all Docker containers used within e2e testing.
 type Manager struct {
-	cfg       ImageConfig
-	pool      *dockertest.Pool
-	resources map[string]*dockertest.Resource
+	cfg                   ImageConfig
+	pool                  *dockertest.Pool
+	resources             map[string]*dockertest.Resource
+	bitcoindContainerName string
+	mongoContainerName    string
 }
 
 // NewManager creates a new Manager instance and initializes
 // all Docker specific utilities. Returns an error if initialization fails.
-func NewManager() (docker *Manager, err error) {
+func NewManager(t *testing.T) (docker *Manager, err error) {
+	// Generate unique container names based on test name to avoid conflicts between tests
+	testHash := generateTestHash(t.Name())
 	docker = &Manager{
-		cfg:       NewImageConfig(),
-		resources: make(map[string]*dockertest.Resource),
+		cfg:                   NewImageConfig(),
+		resources:             make(map[string]*dockertest.Resource),
+		bitcoindContainerName: fmt.Sprintf("bitcoind-test-%s", testHash),
+		mongoContainerName:    fmt.Sprintf("mongo-test-%s", testHash),
 	}
 	docker.pool, err = dockertest.NewPool("")
 	if err != nil {
@@ -46,7 +56,7 @@ func (m *Manager) ExecBitcoindCliCmd(t *testing.T, command []string) (bytes.Buff
 	// this is currently hardcoded, as it will be the same for all tests
 	cmd := []string{"bitcoin-cli", "-chain=regtest", "-rpcuser=user", "-rpcpassword=pass"}
 	cmd = append(cmd, command...)
-	return m.ExecCmd(t, bitcoindContainerName, cmd)
+	return m.ExecCmd(t, m.bitcoindContainerName, cmd)
 }
 
 // ExecCmd executes command by running it on the given container.
@@ -127,7 +137,7 @@ func (m *Manager) RunBitcoindResource(
 ) (*dockertest.Resource, error) {
 	bitcoindResource, err := m.pool.RunWithOptions(
 		&dockertest.RunOptions{
-			Name:       bitcoindContainerName,
+			Name:       m.bitcoindContainerName,
 			Repository: m.cfg.BitcoindRepository,
 			Tag:        m.cfg.BitcoindVersion,
 			User:       "root:root",
@@ -156,7 +166,7 @@ func (m *Manager) RunBitcoindResource(
 	if err != nil {
 		return nil, err
 	}
-	m.resources[bitcoindContainerName] = bitcoindResource
+	m.resources[m.bitcoindContainerName] = bitcoindResource
 	return bitcoindResource, nil
 }
 
@@ -197,14 +207,14 @@ func (m *Manager) RunMongoDbResource() (*dockertest.Resource, error) {
 		return nil, err
 	}
 
-	m.resources[mongoContainerName] = resource
+	m.resources[m.mongoContainerName] = resource
 	return resource, nil
 }
 
 func (m *Manager) MongoHost() string {
-	return m.resources[mongoContainerName].GetHostPort("27017/tcp")
+	return m.resources[m.mongoContainerName].GetHostPort("27017/tcp")
 }
 
 func (m *Manager) BitcoindHost() string {
-	return m.resources[bitcoindContainerName].GetHostPort("18443/tcp")
+	return m.resources[m.bitcoindContainerName].GetHostPort("18443/tcp")
 }
