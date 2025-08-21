@@ -42,8 +42,8 @@ type Manager struct {
 	resources             map[string]*dockertest.Resource
 	bitcoindContainerName string
 	mongoContainerName    string
-	bitcoindHost          string // Store the dynamically assigned RPC port
-	allocatedPort         int    // Store allocated port for cleanup
+	bitcoindHost          string               // Store the dynamically assigned RPC port
+	allocatedPort         int                  // Store allocated port for cleanup
 	portManager           PortManagerInterface // Port manager for dynamic allocation
 }
 
@@ -149,49 +149,67 @@ func (m *Manager) ExecCmd(t *testing.T, containerName string, command []string) 
 func (m *Manager) RunBitcoindResource(
 	bitcoindCfgPath string,
 ) (*dockertest.Resource, error) {
-	// Pre-allocate a port using our port manager to avoid CI conflicts
-	rpcPort, err := m.portManager.AllocatePort()
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate port for bitcoind: %w", err)
+	maxRetries := 3
+	var lastErr error
+
+	for retry := 0; retry < maxRetries; retry++ {
+		// Pre-allocate a port using our port manager to avoid CI conflicts
+		rpcPort, err := m.portManager.AllocatePort()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate port for bitcoind: %w", err)
+		}
+
+		m.bitcoindHost = fmt.Sprintf("127.0.0.1:%d", rpcPort)
+		m.allocatedPort = rpcPort
+
+		bitcoindResource, err := m.pool.RunWithOptions(
+			&dockertest.RunOptions{
+				Name:       m.bitcoindContainerName,
+				Repository: m.cfg.BitcoindRepository,
+				Tag:        m.cfg.BitcoindVersion,
+				User:       "root:root",
+				Mounts: []string{
+					fmt.Sprintf("%s/:/data/.bitcoin", bitcoindCfgPath),
+				},
+				ExposedPorts: []string{
+					"18443",
+				},
+				PortBindings: map[docker.Port][]docker.PortBinding{
+					"18443/tcp": {{HostIP: "", HostPort: fmt.Sprintf("%d", rpcPort)}},
+				},
+				Cmd: []string{
+					"-regtest",
+					"-txindex",
+					"-rpcuser=user",
+					"-rpcpassword=pass",
+					"-rpcallowip=0.0.0.0/0",
+					"-rpcbind=0.0.0.0",
+				},
+			},
+			dockerConf,
+		)
+
+		if err != nil {
+			// Release the port if container creation failed
+			m.portManager.ReleasePort(rpcPort)
+			m.allocatedPort = 0
+
+			if strings.Contains(err.Error(), "address already in use") ||
+				strings.Contains(err.Error(), "failed to listen on TCP socket") {
+				lastErr = err
+				// Wait before retrying
+				time.Sleep(time.Duration(retry+1) * 500 * time.Millisecond)
+				continue
+			}
+
+			return nil, err
+		}
+
+		m.resources[m.bitcoindContainerName] = bitcoindResource
+		return bitcoindResource, nil
 	}
 
-	// Store the allocated port immediately
-	m.bitcoindHost = fmt.Sprintf("127.0.0.1:%d", rpcPort)
-	m.allocatedPort = rpcPort
-
-	bitcoindResource, err := m.pool.RunWithOptions(
-		&dockertest.RunOptions{
-			Name:       m.bitcoindContainerName,
-			Repository: m.cfg.BitcoindRepository,
-			Tag:        m.cfg.BitcoindVersion,
-			User:       "root:root",
-			Mounts: []string{
-				fmt.Sprintf("%s/:/data/.bitcoin", bitcoindCfgPath),
-			},
-			ExposedPorts: []string{
-				"18443",
-			},
-			PortBindings: map[docker.Port][]docker.PortBinding{
-				"18443/tcp": {{HostIP: "", HostPort: fmt.Sprintf("%d", rpcPort)}},
-			},
-			Cmd: []string{
-				"-regtest",
-				"-txindex",
-				"-rpcuser=user",
-				"-rpcpassword=pass",
-				"-rpcallowip=0.0.0.0/0",
-				"-rpcbind=0.0.0.0",
-			},
-		},
-		dockerConf,
-	)
-	if err != nil {
-		// Release the port if container creation failed
-		m.portManager.ReleasePort(rpcPort)
-		return nil, err
-	}
-	m.resources[m.bitcoindContainerName] = bitcoindResource
-	return bitcoindResource, nil
+	return nil, fmt.Errorf("failed to create bitcoind container after %d retries, last error: %w", maxRetries, lastErr)
 }
 
 // ClearResources removes all outstanding Docker resources created by the Manager.

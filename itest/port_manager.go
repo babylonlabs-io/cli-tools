@@ -5,6 +5,7 @@ package e2etest
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -12,11 +13,11 @@ import (
 
 // PortManager manages port allocation for tests to avoid conflicts
 type PortManager struct {
-	MinPort        int
-	MaxPort        int
-	UsedPorts      map[int]bool
-	RecentlyUsed   map[int]time.Time // Track recently released ports to avoid reuse
-	Mutex          sync.Mutex
+	MinPort      int
+	MaxPort      int
+	UsedPorts    map[int]bool
+	RecentlyUsed map[int]time.Time // Track recently released ports to avoid reuse
+	Mutex        sync.Mutex
 }
 
 // NewPortManager creates a new port manager with a safe range for testing
@@ -31,53 +32,63 @@ func NewPortManager() *PortManager {
 
 // isPortAvailable checks if a port is actually available on the system
 func (pm *PortManager) isPortAvailable(port int) bool {
-	// Try to listen on the port
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return false
+	// Try to listen on the port multiple times with retries
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			return false
+		}
+		ln.Close()
+
+		// Wait a bit to ensure the port is properly released
+		time.Sleep(20 * time.Millisecond)
 	}
-	ln.Close()
-	
-	// Additional check: try to bind again after a small delay to catch TIME_WAIT issues
-	time.Sleep(10 * time.Millisecond)
-	ln2, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return false
-	}
-	ln2.Close()
-	
+
 	return true
 }
 
-// isRecentlyUsed checks if a port was released recently (within 5 seconds)
+// isRecentlyUsed checks if a port was released recently (within 10 seconds)
 func (pm *PortManager) isRecentlyUsed(port int) bool {
 	if releaseTime, exists := pm.RecentlyUsed[port]; exists {
-		return time.Since(releaseTime) < 5*time.Second
+		return time.Since(releaseTime) < 10*time.Second
 	}
 	return false
 }
 
-// AllocatePort allocates a single available port
+// AllocatePort allocates a single available port using randomized search
 func (pm *PortManager) AllocatePort() (int, error) {
 	pm.Mutex.Lock()
 	defer pm.Mutex.Unlock()
 
 	// Clean up old recently used entries
-	cutoff := time.Now().Add(-5 * time.Second)
+	cutoff := time.Now().Add(-10 * time.Second)
 	for port, releaseTime := range pm.RecentlyUsed {
 		if releaseTime.Before(cutoff) {
 			delete(pm.RecentlyUsed, port)
 		}
 	}
 
-	for port := pm.MinPort; port <= pm.MaxPort; port++ {
-		if !pm.UsedPorts[port] && !pm.isRecentlyUsed(port) && pm.isPortAvailable(port) {
+	// Try randomized port allocation to reduce collisions
+	attempts := 0
+	maxAttempts := (pm.MaxPort - pm.MinPort + 1) * 2 // Allow 2x range attempts
+
+	for attempts < maxAttempts {
+		attempts++
+
+		// Generate random port in range
+		port := pm.MinPort + rand.Intn(pm.MaxPort-pm.MinPort+1)
+
+		if !pm.UsedPorts[port] && pm.isPortAvailable(port) {
 			pm.UsedPorts[port] = true
 			return port, nil
 		}
+
+		// Add small random delay between attempts to reduce race conditions
+		time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 	}
 
-	return 0, fmt.Errorf("no available ports in range %d-%d", pm.MinPort, pm.MaxPort)
+	return 0, fmt.Errorf("no available ports in range %d-%d after %d attempts", pm.MinPort, pm.MaxPort, maxAttempts)
 }
 
 // ReleasePort releases a port back to the pool
