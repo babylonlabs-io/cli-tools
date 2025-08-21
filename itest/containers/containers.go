@@ -43,7 +43,8 @@ type Manager struct {
 	bitcoindContainerName string
 	mongoContainerName    string
 	bitcoindHost          string               // Store the dynamically assigned RPC port
-	allocatedPort         int                  // Store allocated port for cleanup
+	mongoHost             string               // Store the dynamically assigned MongoDB port
+	allocatedPorts        []int                // Store allocated ports for cleanup
 	portManager           PortManagerInterface // Port manager for dynamic allocation
 }
 
@@ -58,6 +59,7 @@ func NewManager(t *testing.T, pm PortManagerInterface) (docker *Manager, err err
 		bitcoindContainerName: fmt.Sprintf("bitcoind-test-%s", testHash),
 		mongoContainerName:    fmt.Sprintf("mongo-test-%s", testHash),
 		portManager:           pm,
+		allocatedPorts:        make([]int, 0),
 	}
 	docker.pool, err = dockertest.NewPool("")
 	if err != nil {
@@ -160,7 +162,7 @@ func (m *Manager) RunBitcoindResource(
 		}
 
 		m.bitcoindHost = fmt.Sprintf("127.0.0.1:%d", rpcPort)
-		m.allocatedPort = rpcPort
+		m.allocatedPorts = append(m.allocatedPorts, rpcPort)
 
 		bitcoindResource, err := m.pool.RunWithOptions(
 			&dockertest.RunOptions{
@@ -192,7 +194,10 @@ func (m *Manager) RunBitcoindResource(
 		if err != nil {
 			// Release the port if container creation failed
 			m.portManager.ReleasePort(rpcPort)
-			m.allocatedPort = 0
+			// Remove from allocated ports list
+			if len(m.allocatedPorts) > 0 {
+				m.allocatedPorts = m.allocatedPorts[:len(m.allocatedPorts)-1]
+			}
 
 			if strings.Contains(err.Error(), "address already in use") ||
 				strings.Contains(err.Error(), "failed to listen on TCP socket") {
@@ -223,11 +228,11 @@ func (m *Manager) ClearResources() error {
 		}
 	}
 
-	// Release the allocated port
-	if m.allocatedPort != 0 {
-		m.portManager.ReleasePort(m.allocatedPort)
-		m.allocatedPort = 0
+	// Release all allocated ports
+	for _, port := range m.allocatedPorts {
+		m.portManager.ReleasePort(port)
 	}
+	m.allocatedPorts = nil
 
 	return nil
 }
@@ -252,29 +257,66 @@ func dockerConf(config *docker.HostConfig) {
 }
 
 func (m *Manager) RunMongoDbResource() (*dockertest.Resource, error) {
-	resource, err := m.pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mongo",
-		Tag:        "7.0",
-		ExposedPorts: []string{
-			"27017",
+	maxRetries := 3
+	var lastErr error
+
+	for retry := 0; retry < maxRetries; retry++ {
+		// Pre-allocate a port using our port manager to avoid CI conflicts
+		mongoPort, err := m.portManager.AllocatePort()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate port for mongodb: %w", err)
+		}
+
+		m.mongoHost = fmt.Sprintf("127.0.0.1:%d", mongoPort)
+		m.allocatedPorts = append(m.allocatedPorts, mongoPort)
+
+		resource, err := m.pool.RunWithOptions(&dockertest.RunOptions{
+			Name:       m.mongoContainerName,
+			Repository: "mongo",
+			Tag:        "7.0",
+			ExposedPorts: []string{
+				"27017",
+			},
+			PortBindings: map[docker.Port][]docker.PortBinding{
+				"27017/tcp": {{HostIP: "", HostPort: fmt.Sprintf("%d", mongoPort)}},
+			},
+			Env: []string{
+				"MONGO_INITDB_ROOT_USERNAME=root",
+				"MONGO_INITDB_ROOT_PASSWORD=example",
+			},
 		},
-		Env: []string{
-			"MONGO_INITDB_ROOT_USERNAME=root",
-			"MONGO_INITDB_ROOT_PASSWORD=example",
-		},
-	},
-		dockerConf,
-	)
-	if err != nil {
-		return nil, err
+			dockerConf,
+		)
+
+		if err != nil {
+			// Release the port if container creation failed
+			m.portManager.ReleasePort(mongoPort)
+			// Remove from allocated ports list
+			if len(m.allocatedPorts) > 0 {
+				m.allocatedPorts = m.allocatedPorts[:len(m.allocatedPorts)-1]
+			}
+
+			if strings.Contains(err.Error(), "address already in use") ||
+				strings.Contains(err.Error(), "failed to listen on TCP socket") {
+				lastErr = err
+				// Wait before retrying
+				time.Sleep(time.Duration(retry+1) * 500 * time.Millisecond)
+				continue
+			}
+
+			return nil, err
+		}
+
+		// Success!
+		m.resources[m.mongoContainerName] = resource
+		return resource, nil
 	}
 
-	m.resources[m.mongoContainerName] = resource
-	return resource, nil
+	return nil, fmt.Errorf("failed to create mongodb container after %d retries, last error: %w", maxRetries, lastErr)
 }
 
 func (m *Manager) MongoHost() string {
-	return m.resources[m.mongoContainerName].GetHostPort("27017/tcp")
+	return m.mongoHost
 }
 
 func (m *Manager) BitcoindHost() string {
