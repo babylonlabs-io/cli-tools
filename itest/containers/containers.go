@@ -3,8 +3,11 @@ package containers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,27 +16,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	bitcoindContainerName = "bitcoind-test"
-	mongoContainerName    = "mongo-test"
-)
-
 var errRegex = regexp.MustCompile(`(E|e)rror`)
+
+// PortManagerInterface defines the interface for port management
+type PortManagerInterface interface {
+	AllocatePort() (int, error)
+	ReleasePort(port int)
+}
+
+// generateTestHash creates a short hash from the test name for unique container naming
+func generateTestHash(testName string) string {
+	hash := sha256.Sum256([]byte(testName))
+	// Use first 8 characters of hex for readability and add timestamp for extra uniqueness in CI
+	hashStr := hex.EncodeToString(hash[:])[:8]
+	// Add timestamp suffix for CI environments where tests might run in rapid succession
+	timestamp := fmt.Sprintf("%d", time.Now().UnixNano()%100000)
+	return fmt.Sprintf("%s-%s", hashStr, timestamp)
+}
 
 // Manager is a wrapper around all Docker instances, and the Docker API.
 // It provides utilities to run and interact with all Docker containers used within e2e testing.
 type Manager struct {
-	cfg       ImageConfig
-	pool      *dockertest.Pool
-	resources map[string]*dockertest.Resource
+	cfg                   ImageConfig
+	pool                  *dockertest.Pool
+	resources             map[string]*dockertest.Resource
+	bitcoindContainerName string
+	mongoContainerName    string
+	bitcoindHost          string               // Store the dynamically assigned RPC port
+	mongoHost             string               // Store the dynamically assigned MongoDB port
+	allocatedPorts        []int                // Store allocated ports for cleanup
+	portManager           PortManagerInterface // Port manager for dynamic allocation
 }
 
 // NewManager creates a new Manager instance and initializes
 // all Docker specific utilities. Returns an error if initialization fails.
-func NewManager() (docker *Manager, err error) {
+func NewManager(t *testing.T, pm PortManagerInterface) (docker *Manager, err error) {
+	// Generate unique container names based on test name to avoid conflicts between tests
+	testHash := generateTestHash(t.Name())
 	docker = &Manager{
-		cfg:       NewImageConfig(),
-		resources: make(map[string]*dockertest.Resource),
+		cfg:                   NewImageConfig(),
+		resources:             make(map[string]*dockertest.Resource),
+		bitcoindContainerName: fmt.Sprintf("bitcoind-test-%s", testHash),
+		mongoContainerName:    fmt.Sprintf("mongo-test-%s", testHash),
+		portManager:           pm,
+		allocatedPorts:        make([]int, 0),
 	}
 	docker.pool, err = dockertest.NewPool("")
 	if err != nil {
@@ -46,7 +72,7 @@ func (m *Manager) ExecBitcoindCliCmd(t *testing.T, command []string) (bytes.Buff
 	// this is currently hardcoded, as it will be the same for all tests
 	cmd := []string{"bitcoin-cli", "-chain=regtest", "-rpcuser=user", "-rpcpassword=pass"}
 	cmd = append(cmd, command...)
-	return m.ExecCmd(t, bitcoindContainerName, cmd)
+	return m.ExecCmd(t, m.bitcoindContainerName, cmd)
 }
 
 // ExecCmd executes command by running it on the given container.
@@ -125,58 +151,101 @@ func (m *Manager) ExecCmd(t *testing.T, containerName string, command []string) 
 func (m *Manager) RunBitcoindResource(
 	bitcoindCfgPath string,
 ) (*dockertest.Resource, error) {
-	bitcoindResource, err := m.pool.RunWithOptions(
-		&dockertest.RunOptions{
-			Name:       bitcoindContainerName,
-			Repository: m.cfg.BitcoindRepository,
-			Tag:        m.cfg.BitcoindVersion,
-			User:       "root:root",
-			Mounts: []string{
-				fmt.Sprintf("%s/:/data/.bitcoin", bitcoindCfgPath),
+	maxRetries := 3
+	var lastErr error
+
+	for retry := 0; retry < maxRetries; retry++ {
+		// Pre-allocate a port using our port manager to avoid CI conflicts
+		rpcPort, err := m.portManager.AllocatePort()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate port for bitcoind: %w", err)
+		}
+
+		m.bitcoindHost = fmt.Sprintf("127.0.0.1:%d", rpcPort)
+		m.allocatedPorts = append(m.allocatedPorts, rpcPort)
+
+		bitcoindResource, err := m.pool.RunWithOptions(
+			&dockertest.RunOptions{
+				Name:       m.bitcoindContainerName,
+				Repository: m.cfg.BitcoindRepository,
+				Tag:        m.cfg.BitcoindVersion,
+				User:       "root:root",
+				Mounts: []string{
+					fmt.Sprintf("%s/:/data/.bitcoin", bitcoindCfgPath),
+				},
+				ExposedPorts: []string{
+					"18443",
+				},
+				PortBindings: map[docker.Port][]docker.PortBinding{
+					"18443/tcp": {{HostIP: "", HostPort: fmt.Sprintf("%d", rpcPort)}},
+				},
+				Cmd: []string{
+					"-regtest",
+					"-txindex",
+					"-rpcuser=user",
+					"-rpcpassword=pass",
+					"-rpcallowip=0.0.0.0/0",
+					"-rpcbind=0.0.0.0",
+				},
 			},
-			ExposedPorts: []string{
-				"8332",
-				"8333",
-				"28332",
-				"28333",
-				"18443",
-				"18444",
-			},
-			PortBindings: map[docker.Port][]docker.PortBinding{
-				"8332/tcp":  {{HostIP: "", HostPort: "8332"}},
-				"8333/tcp":  {{HostIP: "", HostPort: "8333"}},
-				"28332/tcp": {{HostIP: "", HostPort: "28332"}},
-				"28333/tcp": {{HostIP: "", HostPort: "28333"}},
-				"18443/tcp": {{HostIP: "", HostPort: "18443"}},
-				"18444/tcp": {{HostIP: "", HostPort: "18444"}},
-			},
-			Cmd: []string{
-				"-regtest",
-				"-txindex",
-				"-rpcuser=user",
-				"-rpcpassword=pass",
-				"-rpcallowip=0.0.0.0/0",
-				"-rpcbind=0.0.0.0",
-			},
-		},
-		dockerConf,
-	)
-	if err != nil {
-		return nil, err
+			dockerConf,
+		)
+
+		if err != nil {
+			// Release the port if container creation failed
+			m.portManager.ReleasePort(rpcPort)
+			// Remove from allocated ports list
+			if len(m.allocatedPorts) > 0 {
+				m.allocatedPorts = m.allocatedPorts[:len(m.allocatedPorts)-1]
+			}
+
+			if strings.Contains(err.Error(), "address already in use") ||
+				strings.Contains(err.Error(), "failed to listen on TCP socket") {
+				lastErr = err
+				// Wait before retrying
+				time.Sleep(time.Duration(retry+1) * 500 * time.Millisecond)
+				continue
+			}
+
+			return nil, err
+		}
+
+		m.resources[m.bitcoindContainerName] = bitcoindResource
+		return bitcoindResource, nil
 	}
-	m.resources[bitcoindContainerName] = bitcoindResource
-	return bitcoindResource, nil
+
+	return nil, fmt.Errorf("failed to create bitcoind container after %d retries, last error: %w", maxRetries, lastErr)
 }
 
 // ClearResources removes all outstanding Docker resources created by the Manager.
 func (m *Manager) ClearResources() error {
 	for _, resource := range m.resources {
 		if err := m.pool.Purge(resource); err != nil {
-			return err
+			// In CI environments, containers might already be gone, so ignore "not found" errors
+			if !isNotFoundError(err) {
+				return err
+			}
 		}
 	}
 
+	// Release all allocated ports
+	for _, port := range m.allocatedPorts {
+		m.portManager.ReleasePort(port)
+	}
+	m.allocatedPorts = nil
+
 	return nil
+}
+
+// isNotFoundError checks if the error is due to container not being found
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "No such container") ||
+		strings.Contains(errStr, "not found") ||
+		strings.Contains(errStr, "404")
 }
 
 func dockerConf(config *docker.HostConfig) {
@@ -188,27 +257,68 @@ func dockerConf(config *docker.HostConfig) {
 }
 
 func (m *Manager) RunMongoDbResource() (*dockertest.Resource, error) {
-	resource, err := m.pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mongo",
-		Tag:        "7.0",
-		ExposedPorts: []string{
-			"27017",
+	maxRetries := 3
+	var lastErr error
+
+	for retry := 0; retry < maxRetries; retry++ {
+		// Pre-allocate a port using our port manager to avoid CI conflicts
+		mongoPort, err := m.portManager.AllocatePort()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate port for mongodb: %w", err)
+		}
+
+		m.mongoHost = fmt.Sprintf("127.0.0.1:%d", mongoPort)
+		m.allocatedPorts = append(m.allocatedPorts, mongoPort)
+
+		resource, err := m.pool.RunWithOptions(&dockertest.RunOptions{
+			Name:       m.mongoContainerName,
+			Repository: "mongo",
+			Tag:        "7.0",
+			ExposedPorts: []string{
+				"27017",
+			},
+			PortBindings: map[docker.Port][]docker.PortBinding{
+				"27017/tcp": {{HostIP: "", HostPort: fmt.Sprintf("%d", mongoPort)}},
+			},
+			Env: []string{
+				"MONGO_INITDB_ROOT_USERNAME=root",
+				"MONGO_INITDB_ROOT_PASSWORD=example",
+			},
 		},
-		Env: []string{
-			"MONGO_INITDB_ROOT_USERNAME=root",
-			"MONGO_INITDB_ROOT_PASSWORD=example",
-		},
-	},
-		dockerConf,
-	)
-	if err != nil {
-		return nil, err
+			dockerConf,
+		)
+
+		if err != nil {
+			// Release the port if container creation failed
+			m.portManager.ReleasePort(mongoPort)
+			// Remove from allocated ports list
+			if len(m.allocatedPorts) > 0 {
+				m.allocatedPorts = m.allocatedPorts[:len(m.allocatedPorts)-1]
+			}
+
+			if strings.Contains(err.Error(), "address already in use") ||
+				strings.Contains(err.Error(), "failed to listen on TCP socket") {
+				lastErr = err
+				// Wait before retrying
+				time.Sleep(time.Duration(retry+1) * 500 * time.Millisecond)
+				continue
+			}
+
+			return nil, err
+		}
+
+		// Success!
+		m.resources[m.mongoContainerName] = resource
+		return resource, nil
 	}
 
-	m.resources[mongoContainerName] = resource
-	return resource, nil
+	return nil, fmt.Errorf("failed to create mongodb container after %d retries, last error: %w", maxRetries, lastErr)
 }
 
 func (m *Manager) MongoHost() string {
-	return m.resources[mongoContainerName].GetHostPort("27017/tcp")
+	return m.mongoHost
+}
+
+func (m *Manager) BitcoindHost() string {
+	return m.bitcoindHost
 }
