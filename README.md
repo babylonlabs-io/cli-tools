@@ -68,7 +68,7 @@ Available Commands:
   completion                      Generate the autocompletion script for the specified shell
   create-phase1-staking-tx        create phase1 staking tx
   create-phase1-unbonding-request create phase1 unbonding tx
-  create-phase1-withdaw-request   create phase1 withdraw tx
+  create-phase1-withdraw-request   create phase1 withdraw tx
   create-timestamp-transaction    Creates a timestamp btc transaction by hashing the file input.
   dump-cfg                        dumps default confiiguration file
   help                            Help about any command

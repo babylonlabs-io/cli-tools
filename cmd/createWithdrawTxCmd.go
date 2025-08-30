@@ -66,7 +66,7 @@ type spendStakeTxInfo struct {
 }
 
 var createWithdrawCmd = &cobra.Command{
-	Use:   "create-phase1-withdaw-request",
+	Use:   "create-phase1-withdraw-request",
 	Short: "create phase1 withdraw tx ",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		btcParams, err := getBtcNetworkParams(mustGetStringFlag(cmd, FlagNetwork))
