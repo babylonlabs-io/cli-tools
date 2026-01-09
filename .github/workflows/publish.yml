@@ -7,6 +7,9 @@ on:
     tags:
     - '**'
   workflow_dispatch:
+
+permissions:
+  contents: read
   
 jobs:
   lint_test:
@@ -22,3 +25,10 @@ jobs:
     secrets: inherit
     with:
      publish: true
+    permissions:
+      contents: read        # REQUIRED by reusable workflow
+      id-token: write       # REQUIRED for AWS OIDC
+      # required for all workflows
+      security-events: write
+      # required to fetch internal or private CodeQL packs
+      packages: read
